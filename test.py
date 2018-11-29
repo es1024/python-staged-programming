@@ -21,7 +21,7 @@ class SubexprVisitor(ast.NodeVisitor):
 class NameExtractor(SubexprVisitor):
     def __init__(self):
         self.names = set()
-        self.names = {'a', 'b'}
+        self.names = {'a', 'b'} # TODO remove after subexprvisitor visits everything
 
     def visit_Name(self, node):
         self.names.add(node.id)
@@ -39,8 +39,7 @@ class ProcessEscape(SubexprVisitor):
             return ___v
         ne = NameExtractor()
         ne.visit(node.elts[0])
-        x = inner(ne.names, astunparse.unparse(node.elts[0]))
-        return q[ast_literal[x]]
+        return inner(ne.names, astunparse.unparse(node.elts[0]))
 
 def foo(f):
     parse_tree = ast.parse(inspect.getsource(f).strip()).body[0]
