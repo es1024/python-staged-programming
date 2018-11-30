@@ -66,15 +66,16 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
     # get caller's globals and locals for escape evaluation
     _globals = inspect.stack()[depth][0].f_globals
     _locals = inspect.stack()[depth][0].f_locals
+    params = inspect.getfullargspec(f)[0]
     parse_tree = ast.parse(inspect.getsource(f).strip()).body[0]
-    unescaped = ProcessEscape(f.__code__.co_varnames, _globals, _locals).visit(parse_tree)
+    unescaped = ProcessEscape(params, _globals, _locals).visit(parse_tree)
 
     if dump_unescaped:
         import astunparse
         processed_src = astunparse.unparse(unescaped.body).strip()
         header_src = 'def ___{}_inner({}):\n{}'.format(
                 f.__name__,
-                ', '.join(f.__code__.co_varnames),
+                ', '.join(params),
                 '\n'.join(map(lambda x: '\t' + x, processed_src.split('\n'))))
         print(header_src)
 
@@ -82,8 +83,8 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
         func = Frontend().visit(parse_tree)
         TypeChecker.analyze(func)
         if dump_ir:
-            from printer import IRPrinter
-            print(IRPrinter().visit(func))
+            import astor
+            print(astor.dump_tree(func))
 
         llvm_mod = Backend.generate_llvm(func)
         if dump_llvm:
@@ -104,7 +105,7 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
         processed_src = astunparse.unparse(unescaped.body).strip()
         header_src = 'def ___{}_inner({}):\n{}'.format(
                 f.__name__,
-                ', '.join(f.__code__.co_varnames),
+                ', '.join(params),
                 '\n'.join(map(lambda x: '\t' + x, processed_src.split('\n'))))
         exec(header_src, _globals, _locals)
         return _locals['___{}_inner'.format(f.__name__)]

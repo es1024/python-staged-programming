@@ -30,7 +30,7 @@ class Frontend(ast.NodeVisitor):
                 return ir.CastToInt(arg)
             if node.func.id == 'float':
                 return ir.CastToFloat(arg)
-        raise NotImplementedError('Calls to functions other than int/float casts')
+        raise NotImplementedError('Calls to functions other than int/float casts: ' + ast.dump(node))
 
     def visit_BinOp(self, node):
         # BinOp(expr left, operator op, expr right)
