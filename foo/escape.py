@@ -29,6 +29,11 @@ class SubexprVisitor(ast.NodeVisitor):
         node.value = self.visit(node.value)
         return node
 
+    def visit_Assign(self, node):
+        node.targets = list(map(self.visit, node.targets))
+        node.value = self.visit(node.value)
+        return node
+
     def visit_BinOp(self, node):
         node.left = self.visit(node.left)
         node.right = self.visit(node.right)

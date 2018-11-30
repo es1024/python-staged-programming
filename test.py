@@ -9,14 +9,17 @@ with hq as block_of_code:
     b = a + 3
 
 @foo
-def mse(a: float, b: float):
+def mse(a: float, b: float) -> float:
     return {gen_square(a)} - {gen_square(b)}
 
 @foo
-def test_block_quotes():
+def test_block_quotes() -> int:
     {block_of_code}
     return b
 
-print(mse(4, 3))
+def python_mse(a: float, b: float) -> float:
+    return a * a + b * b
+
+print(mse(4.0, 3.0))
 print(test_block_quotes())
 
