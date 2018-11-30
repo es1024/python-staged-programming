@@ -50,12 +50,15 @@ class ProcessEscape(SubexprVisitor):
         self.globals = _globals
         self.locals = _locals
         self.names = set(list(params))
+        for p in params:
+            self.locals[p] = q[name[p]]
 
     def visit_Assign(self, node):
         rv = self.generic_visit(node)
         for target in rv.targets:
             if hasattr(target, 'id'):
                 self.names.add(target.id)
+                self.locals[target.id] = q[name[target.id]]
         return rv
 
     def process_escape(self, node):
