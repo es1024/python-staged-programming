@@ -148,7 +148,7 @@ class Backend(ast.NodeVisitor):
 
         rblock = self.func.append_basic_block()
         tblock = self.func.append_basic_block()
-        
+
         leftbool = self.boolcast(left, node.left.type)
         bcond = self.const(node.op == Bop.And)
         self.builder.cbranch(
@@ -194,6 +194,8 @@ class Backend(ast.NodeVisitor):
         index = self.visit(node.index)
         if node.type == TypeChecker.bool_type:
             sz = 1
+        elif node.type == TypeChecker.float_type:
+            sz = 8
         else:
             sz = 4
         index = self.builder.mul(index, self.const(sz))
@@ -243,7 +245,7 @@ class Backend(ast.NodeVisitor):
             self.builder.store(v, addr)
         else:
             self.symbol_table[ref.name] = v
-    
+
     def visit_Assign(self, node):
         v = self.visit(node.val)
         self.assign(node.ref, v, node.val.type)
@@ -253,38 +255,96 @@ class Backend(ast.NodeVisitor):
         iblock = self.func.append_basic_block()
         eblock = self.func.append_basic_block()
         jblock = self.func.append_basic_block()
-        
+
         cond = self.builder.icmp_unsigned('==', cond, self.const(True))
         self.builder.cbranch(cond, iblock, eblock)
 
+        old_symbols = self.symbol_table.copy()
+
         self.builder = llvm.IRBuilder(iblock)
         self.visit(node.body)
+        iblock = self.builder.block
         self.builder.branch(jblock)
+
+        if_symbols = self.symbol_table
+        self.symbol_table = old_symbols.copy()
 
         self.builder = llvm.IRBuilder(eblock)
         if node.else_body:
             self.visit(node.else_body)
+            eblock = self.builder.block
         self.builder.branch(jblock)
+
+        else_symbols = self.symbol_table
+        self.symbol_table = old_symbols.copy()
 
         self.builder = llvm.IRBuilder(jblock)
 
+        if_sk = set(if_symbols.keys())
+        else_sk = set(else_symbols.keys())
+
+        for s in if_sk:
+            typ = if_symbols[s].type
+            phi = self.builder.phi(typ)
+            phi.add_incoming(if_symbols[s], iblock)
+            if s in else_sk:
+                phi.add_incoming(else_symbols[s], eblock)
+            else:
+                phi.add_incoming(llvm.Constant(typ, 0), eblock)
+            self.symbol_table[s] = phi
+        else_sk = else_sk.difference(if_sk)
+        for s in else_sk:
+            typ = else_symbols[s].type
+            phi = self.builder.phi(typ)
+            phi.add_incoming(else_symbols[s], eblock)
+            phi.add_incoming(llvm.Constant(typ, 0), iblock)
+
     def visit_For(self, node):
+        bblock = self.func.append_basic_block()
+        self.builder.branch(bblock)
+        self.builder = llvm.IRBuilder(bblock)
+
         mn = self.visit(node.min)
         mx = self.visit(node.max)
         ref = Ref(name=node.var)
         ref.type = TypeChecker.int_type
         self.assign(ref, mn, TypeChecker.int_type)
 
-        iblock = self.func.append_basic_block()
         cblock = self.func.append_basic_block()
-        jblock = self.func.append_basic_block()
-        self.builder.branch(cblock)
-        
-        self.builder = llvm.IRBuilder(iblock)
-        self.visit(node.body)
+        iblock = self.func.append_basic_block()
         self.builder.branch(cblock)
 
         self.builder = llvm.IRBuilder(cblock)
+        for s in self.symbol_table.keys():
+            typ = self.symbol_table[s].type
+            phi = self.builder.phi(typ)
+            phi.add_incoming(self.symbol_table[s], bblock)
+            self.symbol_table[s] = phi
+
+        self.builder = llvm.IRBuilder(iblock)
+        old_symbols = self.symbol_table.copy()
+        self.visit(node.body)
+        new_iblock = self.builder.block
+        self.assign(ref, self.builder.add(self.visit(ref), llvm.Constant(TypeChecker.int_type, 1)), TypeChecker.int_type)
+        self.builder.branch(cblock)
+
+        jblock = self.func.append_basic_block()
+
+        self.builder = llvm.IRBuilder(cblock)
+
+        old_sk = set(old_symbols.keys())
+        new_sk = set(self.symbol_table.keys())
+        for k in new_sk:
+            if k in old_sk:
+                old_symbols[k].add_incoming(self.symbol_table[k], new_iblock)
+                self.symbol_table[k] = old_symbols[k]
+            else:
+                typ = self.symbol_table[k].type
+                phi = self.builder.phi(typ)
+                phi.add_incoming(self.symbol_table[k], new_iblock)
+                phi.add_incoming(llvm.Constant(typ, 0), bblock)
+                self.symbol_table[k] = phi
+
         vref = self.visit(ref)
         cond = self.builder.icmp_signed('<', vref, mx)
         self.builder.cbranch(cond, iblock, jblock)
