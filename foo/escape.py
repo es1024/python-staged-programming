@@ -39,6 +39,10 @@ class SubexprVisitor(ast.NodeVisitor):
         node.right = self.visit(node.right)
         return node
 
+    def visit_list(self, nodes):
+        r = list(map(self.visit, nodes))
+        return r
+
 class NameExtractor(SubexprVisitor):
     """
     AST node visitor to generate a set of all names used.
@@ -50,28 +54,53 @@ class NameExtractor(SubexprVisitor):
         self.names.add(node.id)
         return node
 
+def to_ast(maybe_ast):
+    if isinstance(maybe_ast, ast.AST):
+        return maybe_ast
+    elif isinstance(maybe_ast, list):
+        return list(map(to_ast, maybe_ast))
+    else:
+        return q[u[maybe_ast]]
+
 class CapturedExtractor(SubexprVisitor):
     """
     AST node visitor that converts macropy Captured objects into their value.
     """
     def visit_Captured(self, node):
-        return node.val
+        return to_ast(node.val)
 
 class ProcessEscape(SubexprVisitor):
     """
     AST node visitor that transforms the AST to remove escapes.
     """
-    def __init__(self, _globals, _locals):
+    def __init__(self, params, _globals, _locals):
         self.globals = _globals
         self.locals = _locals
+        self.names = set(list(params))
 
-    def visit_Set(self, node):
-        assert len(node.elts) == 1
+    def visit_Assign(self, node):
+        rv = super().visit_Assign(node)
+        for target in rv.targets:
+            if hasattr(target, 'id'):
+                self.names.add(target.id)
+        return rv
+
+    def process_escape(self, node):
         ne = NameExtractor()
-        ne.visit(node.elts[0])
+        ne.visit(node)
         _locals = self.locals.copy()
         for n in ne.names:
             _locals[n] = _locals[n] if n in _locals else q[name[n]]
-        ev = eval(astunparse.unparse(node.elts[0]), self.globals, _locals)
-        return CapturedExtractor().visit(ev)
+        ev = eval(astunparse.unparse(node), self.globals, _locals)
+        return self.visit(to_ast(CapturedExtractor().visit(ev)))
+
+    def visit_Name(self, node):
+        if node.id not in self.names and hasattr(node, 'ctx') and type(node.ctx) == ast.Load:
+            r = self.process_escape(node)
+            return r
+        return node
+
+    def visit_Set(self, node):
+        assert len(node.elts) == 1
+        return self.process_escape(node.elts[0])
 

@@ -67,7 +67,7 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
     _globals = inspect.stack()[depth][0].f_globals
     _locals = inspect.stack()[depth][0].f_locals
     parse_tree = ast.parse(inspect.getsource(f).strip()).body[0]
-    unescaped = ProcessEscape(_globals, _locals).visit(parse_tree)
+    unescaped = ProcessEscape(f.__code__.co_varnames, _globals, _locals).visit(parse_tree)
 
     if dump_unescaped:
         import astunparse
