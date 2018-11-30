@@ -1,0 +1,2 @@
+from .compile import foo
+
