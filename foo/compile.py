@@ -72,7 +72,11 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
     if dump_unescaped:
         import astunparse
         processed_src = astunparse.unparse(unescaped.body).strip()
-        print(processed_src)
+        header_src = 'def ___{}_inner({}):\n{}'.format(
+                f.__name__,
+                ', '.join(f.__code__.co_varnames),
+                '\n'.join(map(lambda x: '\t' + x, processed_src.split('\n'))))
+        print(header_src)
 
     if generate_llvm:
         func = Frontend().visit(parse_tree)
