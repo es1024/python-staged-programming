@@ -211,7 +211,7 @@ class Backend(ast.NodeVisitor):
             sz = 8
         else:
             sz = 4
-        index = self.builder.mul(index, self.const(sz))
+        # index = self.builder.mul(index, self.const(sz))
         base = self.builder.ptrtoint(base, TypeChecker.int_type)
         addr = self.builder.add(base, index)
         addr = self.builder.inttoptr(addr, node.type.as_pointer())

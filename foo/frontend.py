@@ -41,7 +41,7 @@ class Frontend(ast.NodeVisitor):
         raise NotImplementedError('Problem with function name: ' + ast.dump(node))
 
     def visit_List(self, node):
-        return ir.Array(node.elts) 
+        return ir.Array([self.visit(elt) for elt in node.elts]) 
 
     def visit_BinOp(self, node):
         # BinOp(expr left, operator op, expr right)
