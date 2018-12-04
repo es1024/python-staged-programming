@@ -3,6 +3,20 @@ from macropy.core.quotes import macros, q, name
 import ast
 import astunparse
 
+def flatten(x):
+    try:
+        itr = iter(x)
+    except TypeError:
+        yield x
+        raise StopIteration
+    else:
+        cur_itr = flatten(next(itr))
+        while True:
+            try:
+                yield next(cur_itr)
+            except StopIteration:
+                cur_itr = flatten(next(itr))
+            
 class SubexprVisitor(ast.NodeVisitor):
     """
     AST node visitor that just visits every node in a Python AST.
@@ -72,6 +86,12 @@ class ProcessEscape(SubexprVisitor):
         if hasattr(ev, 'is_foo') and ev.is_foo:
             return node
         x = self.visit(to_ast(ev))
+        try:
+            iter(x)
+        except TypeError:
+            pass
+        else:
+            x = list(flatten(x))
         return x
 
     def visit_Name(self, node):

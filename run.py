@@ -1,2 +1,2 @@
 import macropy.activate
-from test import *
+from bf import *

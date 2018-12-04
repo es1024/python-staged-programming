@@ -1,7 +1,7 @@
 import ast
 
 from llvmlite import ir as llvm
-from . import irtypes as ir
+from .irtypes import Bop, Cop, Uop, Assign, Ref
 
 def assign(f):
     def wrap(self, node):
@@ -30,10 +30,34 @@ class TypeChecker(ast.NodeVisitor):
         type_builder = LLVMTypeBuilder()
         self.return_type = type_builder.visit(node.return_type)
         argument_types = list(map(type_builder.visit, node.arg_types))
-        for i in range(len(node.args)):
-            self.symbol_table[node.args[i]] = argument_types[i]
-        self.visit(node.body)
+        for arg, arg_type in zip(node.args, argument_types):
+            self.symbol_table[arg] = arg_type
+        btype = None
+        if node.body:
+            btype = self.visit(node.body)
+        if btype != self.return_type:
+            raise TypeError('bad return type')
         return llvm.FunctionType(self.return_type, tuple(argument_types))
+
+    def visit_Block(self, node):
+        for b in node.body:
+            btype = self.visit(b)
+            if btype is not None:
+                if btype != self.return_type:
+                    raise NotImplementedError('bad return type')
+                return btype
+   
+    @assign
+    def visit_IntConst(self, node):
+        return self.int_type
+
+    @assign
+    def visit_FloatConst(self, node):
+        return self.float_type
+
+    @assign
+    def visit_BoolConst(self, node):
+        return self.bool_type
 
     def visit_FuncCall(self, node):
         if node.name not in self.symbol_table:
@@ -50,146 +74,113 @@ class TypeChecker(ast.NodeVisitor):
                 raise NotImplementedError('array contains multiple types')
         return llvm.ArrayType(typ, len(self.node.elts))
 
-    def visit_BinOp(self, node):
-        left = self.visit(node.left)
-        right = self.visit(node.right)
-        if node.op == ir.Bop.Add or node.op == ir.Bop.Sub or \
-            node.op == ir.Bop.Mul or node.op == ir.Bop.Div or node.op == ir.Bop.Mod:
-            if left == TypeChecker.int_type and right == TypeChecker.float_type:
-                node.left = ir.CastToFloat(node.left)
-                self.visit(node.left)
-                node.type = TypeChecker.float_type
-                return node.type
-            elif left == TypeChecker.float_type and right == TypeChecker.int_type:
-                node.right = ir.CastToFloat(node.right)
-                self.visit(node.right)
-                node.type = TypeChecker.float_type
-                return node.type
-            elif left == TypeChecker.int_type and right == TypeChecker.int_type:
-                node.type = TypeChecker.int_type
-                return node.type
-            elif left == TypeChecker.float_type and right == TypeChecker.float_type:
-                node.type = TypeChecker.float_type
-                return node.type
-            else:
-                raise NotImplementedError("Operation argument not supported")
-        elif node.op == ir.Bop.And or node.op == ir.Bop.Or:
-            if left == TypeChecker.bool_type and right == TypeChecker.bool_type:
-                node.type = TypeChecker.bool_type
-                return node.type
-            raise NotImplementedError("Operation argument not supported")
-        raise NotImplementedError()
-
-    def visit_CmpOp(self, node):
-        left = self.visit(node.left)
-        right = self.visit(node.right)
-        if left == TypeChecker.int_type and right == TypeChecker.float_type:
-            node.left = ir.CastToFloat(node.left)
-            self.visit(node.left)
-        elif left == TypeChecker.float_type and right == TypeChecker.int_type:
-            node.right = ir.CastToFloat(node.right)
-            self.visit(node.right)
-        elif left == TypeChecker.int_type and right == TypeChecker.int_type:
-            pass
-        elif left == TypeChecker.float_type and right == TypeChecker.float_type:
-            pass
-        else:
-            raise NotImplementedError("Operation argument not supported")
-        if node.op == ir.Cop.EQ or node.op == ir.Cop.NE or \
-            node.op == ir.Cop.LT or node.op == ir.Cop.GT or \
-            node.op == ir.Cop.LE or node.op == ir.Cop.GE:
-            node.type = TypeChecker.bool_type
-            return node.type
-        raise NotImplementedError()
-
+    @assign
     def visit_UnOp(self, node):
-        arg = self.visit(node.e)
-        if node.op == ir.Uop.Neg:
-            if arg == TypeChecker.int_type:
-                node.type = TypeChecker.int_type
-            elif arg == TypeChecker.float_type:
-                node.type = TypeChecker.float_type
-            else:
-                raise NotImplementedError("Operation argument not supported")
-            return node.type
-        elif node.op == ir.Uop.Not:
-            node.type = TypeChecker.bool_type
-            return node.type
-        raise NotImplementedError()
-
-    def visit_Ref(self, node):
-        if node.name not in self.symbol_table:
-            raise NotImplementedError("Reference not assigned")
-        if node.index != None:
-            i = self.visit(node.index)
-            if i != TypeChecker.int_type:
-                raise NotImplementedError()
-            node.type = self.symbol_table[node.name].pointee
+        if node.op == Uop.Neg:
+            etype = self.visit(node.e)
+            if etype == self.bool_type:
+                raise NotImplementedError('Cannot negate boolean')
+            return etype
         else:
-            node.type = self.symbol_table[node.name]
-        return node.type
+            etype = self.visit(node.e)
+            return self.bool_type
 
-    def visit_IntConst(self, node):
-        node.type = TypeChecker.int_type
-        return node.type
+    @assign
+    def visit_BinOp(self, node):
+        left_type = self.visit(node.left)
+        right_type = self.visit(node.right)
+        if node.op in [Bop.Add, Bop.Sub, Bop.Mul, Bop.Mod]:
+            if self.bool_type in [left_type, right_type] and left_type != right_type:
+                raise NotImplementedError('boolean mixed arithmetic not supported')
+            if left_type != right_type:
+                return self.float_type
+            else:
+                return left_type
+        elif node.op == Bop.Div:
+            return self.float_type
+        else:
+            if left_type != right_type:
+                raise NotImplementedError('boolop must have same type')
+            return left_type
 
-    def visit_FloatConst(self, node):
-        node.type = TypeChecker.float_type
-        return node.type
+    @assign
+    def visit_CmpOp(self, node):
+        left_type = self.visit(node.left)
+        right_type = self.visit(node.right)
 
-    def visit_BoolConst(self, node):
-        node.type = TypeChecker.bool_type
-        return node.type
+        if self.bool_type in [left_type, right_type] and left_type != right_type:
+                raise NotImplementedError('cannot compare boolean with nonboolean')
+        return self.bool_type
+    
+    @assign
+    def visit_Ref(self, node):
+        try:
+            rtype = self.symbol_table[node.name]
+        except KeyError:
+            raise TypeError('ref undefined')
+        if node.index is None:
+            return rtype
+        if rtype in [self.int_type, self.float_type, self.bool_type]:
+            raise TypeError('cannot dereference int/float/bool')
+        if self.visit(node.index) != self.int_type:
+            raise TypeError('cannot use non-integer indices')
+        return rtype.pointee 
 
+    @assign
     def visit_CastToFloat(self, node):
-        arg = self.visit(node.expr)
-        if arg != TypeChecker.int_type:
-            raise NotImplementedError("Only casts int to float")
-        node.type = TypeChecker.float_type
-        return node.type
-
+        self.visit(node.expr)
+        return self.float_type
+       
+    @assign
     def visit_CastToInt(self, node):
-        arg = self.visit(node.expr)
-        if arg != TypeChecker.float_type:
-            raise NotImplementedError("Only casts float to int")
-        node.type = TypeChecker.int_type
-        return node.type
+        self.visit(node.expr)
+        return self.int_type
+
+    def visit_Return(self, node):
+        rtype = self.visit(node.val)
+        if rtype != self.return_type:
+            raise TypeError('bad return type')
+        return rtype
 
     def visit_Assign(self, node):
         if node.ref.name in self.symbol_table:
-            if node.ref.index:
-                if self.symbol_table[node.ref.name].pointee != self.visit(node.val):
-                    raise NotImplementedError("Inconsistent Type")
-            elif self.visit(node.ref) != self.visit(node.val):
-                raise NotImplementedError('Inconsistent type')
-            self.symbol_table[node.ref.name] = self.visit(node.val)
-            return None
+            self.visit(node.ref)
+            if node.ref.index is None:
+                ltype = self.symbol_table[node.ref.name]
+            else:
+                ltype = self.symbol_table[node.ref.name].pointee
+            rtype = self.visit(node.val)
+            if ltype != rtype:
+                raise TypeError('type mismatch in assignment')
         else:
-            node.ref.type = self.visit(node.val)
-            self.symbol_table[node.ref.name] = node.ref.type
-            return None
-        raise NotImplementedError("Assignment issue")
-
-    def visit_Return(self, node):
-        if self.visit(node.val) != self.return_type:
-            raise NotImplementedError("Inconsistent return type")
-
-    def visit_Block(self, node):
-        for stmt in node.body:
-            self.visit(stmt)
+            rtype = self.visit(node.val)
+            if node.ref.index is None:
+                self.symbol_table[node.ref.name] = rtype
+            else:
+                raise TypeError('cannot dereference None')
 
     def visit_If(self, node):
         self.visit(node.cond)
-        self.visit(node.body)
+        btype = self.visit(node.body)
         if node.else_body:
-            self.visit(node.else_body)
+            etype = self.visit(node.else_body)
+        else:
+            etype = None
+        if btype is not None:
+            if btype != self.return_type:
+                raise TypeError('bad return type')
+        if etype is not None:
+            if etype != self.return_type:
+                raise TypeError('bad return type')
+        if btype is not None and etype is not None:
+            return self.return_type
 
     def visit_For(self, node):
         low = self.visit(node.min)
         high = self.visit(node.max)
         if low != TypeChecker.int_type or high != TypeChecker.int_type:
             raise NotImplementedError()
-        self.visit(ir.Assign(ir.Ref(node.var), node.min))
+        self.visit(Assign(Ref(node.var), node.min))
         self.visit(node.body)
 
 # Used to parse function signatures.

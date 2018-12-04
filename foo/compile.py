@@ -69,7 +69,11 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
     _globals = inspect.stack()[depth][0].f_globals
     _locals = inspect.stack()[depth][0].f_locals
     params = inspect.getfullargspec(f)[0]
-    parse_tree = ast.parse(inspect.getsource(f).strip()).body[0]
+    source = inspect.getsource(f)
+    base_indent = len(source) - len(source.lstrip())
+    lines = map(lambda _: _[base_indent:], source.split('\n'))
+    source = '\n'.join(lines).strip()
+    parse_tree = ast.parse(source).body[0]
     unescaped = ProcessEscape(params, _globals, _locals).visit(parse_tree)
 
     if dump_unescaped:
