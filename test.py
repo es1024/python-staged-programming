@@ -1,11 +1,11 @@
-from macropy.core.hquotes import macros, hq
 from foo import foo
+from foo.quote import macros, q
 
 def gen_square(x):
-    return hq[x * x]
+    return q[x * x]
 
 a = 1
-with hq as block_of_code:
+with q as block_of_code:
     a = a + 2
     b = a + 3
 
@@ -13,7 +13,7 @@ with hq as block_of_code:
 def mse(a: float, b: float) -> float:
     return {gen_square(a)} - {gen_square(b)}
 
-@foo(dump_unescaped=True)
+@foo(dump_unescaped=True, dump_llvm=True)
 def test_block_quotes(a: int) -> int:
     {block_of_code}
     return b
