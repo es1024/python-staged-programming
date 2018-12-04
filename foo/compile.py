@@ -84,7 +84,7 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
     global_name = f.__name__
     if generate_llvm:
         func = Frontend().visit(parse_tree)
-        TypeChecker.analyze(func)
+        TypeChecker.analyze(func, global_vars)
         if dump_ir:
             import astor
             print(astor.dump_tree(func))

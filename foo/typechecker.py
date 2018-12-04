@@ -16,13 +16,15 @@ class TypeChecker(ast.NodeVisitor):
     bool_type = llvm.IntType(1)
 
     @staticmethod
-    def analyze(func):
-        func.signature = TypeChecker().visit(func)
+    def analyze(func, global_vars):
+        func.signature = TypeChecker(global_vars).visit(func)
 
-    def __init__(self):
+    def __init__(self, global_vars):
         super(TypeChecker, self).__init__()
         self.symbol_table = {}
         self.return_type = None
+        for n, typ in global_vars:
+            self.symbol_table[n] = typp
 
     def visit_FuncDef(self, node):
         type_builder = LLVMTypeBuilder()
