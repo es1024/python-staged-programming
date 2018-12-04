@@ -100,7 +100,7 @@ class TypeChecker(ast.NodeVisitor):
         try:
             rtype = self.symbol_table[node.name]
         except KeyError:
-            raise TypeError('ref undefined')
+            raise TypeError('ref undefined: {}'.format(node.name))
         if node.index is None:
             return rtype
         if rtype in [self.int_type, self.float_type, self.bool_type]:

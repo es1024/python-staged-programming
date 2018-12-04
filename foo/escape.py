@@ -47,8 +47,8 @@ class ProcessEscape(SubexprVisitor):
     AST node visitor that transforms the AST to remove escapes.
     """
     def __init__(self, params, _globals, _locals):
-        self.globals = _globals
-        self.locals = _locals
+        self.globals = _globals.copy()
+        self.locals = _locals.copy()
         self.names = set(list(params))
         for p in params:
             self.locals[p] = q[name[p]]
@@ -66,9 +66,11 @@ class ProcessEscape(SubexprVisitor):
         ne.visit(node)
         _locals = self.locals.copy()
         for n in ne.names:
-            _locals[n] = _locals[n] if n in _locals else q[name[n]]
+            if n not in self.globals and n not in _locals:
+                _locals[n] = q[name[n]]
         ev = eval(astunparse.unparse(node), self.globals, _locals)
-        return self.visit(to_ast(ev))
+        x = self.visit(to_ast(ev))
+        return x
 
     def visit_Name(self, node):
         if node.id not in self.names and hasattr(node, 'ctx') and type(node.ctx) == ast.Load:
