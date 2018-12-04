@@ -40,6 +40,9 @@ class Frontend(ast.NodeVisitor):
                 return ir.FuncCall(node.func.id, args)
         raise NotImplementedError('Problem with function name: ' + ast.dump(node))
 
+    def visit_List(self, node):
+        return ir.Array(node.elts) 
+
     def visit_BinOp(self, node):
         # BinOp(expr left, operator op, expr right)
         # operator = Add | Sub | Mult | MatMult | Div | Mod | Pow | LShift | RShift | BitOr | BitXor | BitAnd | FloorDiv

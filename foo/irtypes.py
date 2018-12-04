@@ -9,6 +9,7 @@ Expr = BinOp(Bop op, Expr left, Expr right)
      | FloatConst(float val)
      | IntConst(int val)
      | FuncCall(Str name, Expr* args)
+     | Array(Expr* elts)
 
 Uop = Neg | Not
 Bop = Add | Sub | Mul | Div | Mod | And | Or
@@ -48,6 +49,9 @@ class Cop(Enum):
 
 class FuncCall(ast.AST):
     _fields = ['name', 'args']
+
+class Array(ast.AST):
+    _fields = ['elts']
 
 class IntConst(ast.AST):
     _fields = ['val', ]
