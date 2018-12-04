@@ -1,7 +1,7 @@
 import ast
 
 from llvmlite import ir as llvm
-from .irtypes import Uop, Bop, Cop, Assign
+from . import irtypes as ir
 
 def assign(f):
     def wrap(self, node):
