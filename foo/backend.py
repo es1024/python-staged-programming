@@ -54,6 +54,11 @@ class Backend(ast.NodeVisitor):
         for b in node.body:
             self.visit(b)
 
+    def visit_FuncCall(self, node):
+        if node.name in self.global_vars:
+            return self.builder.call(self.global_vars[node.name], node.args)
+        raise NotImplementedError('function being called missing')
+
     def const(self, v):
         if type(v) == int:
             return llvm.Constant(TypeChecker.int_type, v)

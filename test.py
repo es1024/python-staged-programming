@@ -10,6 +10,15 @@ with hq as block_of_code:
     b = a + 3
 
 @foo
+def ret5() -> int:
+    return 5
+
+@foo
+def call_test() -> int:
+    five = ret5()
+    return five
+'''
+@foo
 def mse(a: float, b: float) -> float:
     return {gen_square(a)} - {gen_square(b)}
 
@@ -32,4 +41,4 @@ print(test_block_quotes(2))
 a = 3
 print(test_block_quotes_captured())
 print(test_block_quotes(2))
-
+'''

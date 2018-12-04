@@ -22,15 +22,23 @@ class Frontend(ast.NodeVisitor):
         raise NotImplementedError('None keyword not supported')
 
     def visit_Call(self, node):
-        if len(node.args) != 1:
-            raise NotImplementedError('Casts expect single argument')
-        arg = self.visit(node.args[0])
         if isinstance(node.func, ast.Name):
             if node.func.id == 'int':
+                if len(node.args) != 1:
+                    raise NotImplementedError('Casts expect single argument')
+                arg = self.visit(node.args[0])
                 return ir.CastToInt(arg)
             if node.func.id == 'float':
+                if len(node.args) != 1:
+                    raise NotImplementedError('Casts expect single argument')
+                arg = self.visit(node.args[0])
                 return ir.CastToFloat(arg)
-        raise NotImplementedError('Calls to functions other than int/float casts: ' + ast.dump(node))
+            else:
+                args = []
+                for i in node.args:
+                    args.append(self.visit(i))
+                return ir.FuncCall(node.func.id, args)
+        raise NotImplementedError('Problem with function name: ' + ast.dump(node))
 
     def visit_BinOp(self, node):
         # BinOp(expr left, operator op, expr right)
