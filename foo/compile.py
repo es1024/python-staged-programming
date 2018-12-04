@@ -13,6 +13,8 @@ from .interpreter import Interpreter
 from .marshalling import MarshalledArg
 from .typechecker import TypeChecker
 
+global_vars = {}
+
 @functools.lru_cache()
 def get_jit_engine():
     binding.initialize()
@@ -35,14 +37,14 @@ def assemble(module):
     return mod
 
 def register_module(llvm_mod, dump_llvm=False):
-    assert len(llvm_mod.functions) == 1
+    # assert len(llvm_mod.functions) == 1
     engine = get_jit_engine()
     native_mod = assemble(llvm_mod)
     if dump_llvm:
         print(native_mod)
     engine.add_module(native_mod)
     engine.finalize_object()
-    return engine.get_function_address(llvm_mod.functions[0].name)
+    return engine.get_function_address(llvm_mod.functions[-1].name)
 
 def run_marshalled(func, func_ptr, *args):
     # Gather argument types
@@ -79,6 +81,7 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
                 '\n'.join(map(lambda x: '\t' + x, processed_src.split('\n'))))
         print(header_src)
 
+    global_name = f.__name__
     if generate_llvm:
         func = Frontend().visit(parse_tree)
         TypeChecker.analyze(func)
@@ -86,7 +89,8 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
             import astor
             print(astor.dump_tree(func))
 
-        llvm_mod = Backend.generate_llvm(func)
+        llvm_mod, ftype = Backend.generate_llvm(func, global_vars)
+        global_vars[global_name] = ftype
         if dump_llvm:
             print(str(llvm_mod))
 
@@ -95,7 +99,7 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
         def interpret(*interpret_args):
             return Interpreter().call_fun(func, *interpret_args)
 
-        native_runner = functools.partial(run_marshalled, llvm_mod.functions[0], func_ptr)
+        native_runner = functools.partial(run_marshalled, llvm_mod.functions[-1], func_ptr)
         native_runner.interpret = interpret
         native_runner.py = f
         return native_runner

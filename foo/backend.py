@@ -8,22 +8,27 @@ from .irtypes import Uop, Bop, Cop, Ref
 
 
 class Backend(ast.NodeVisitor):
-    def __init__(self, name):
+    def __init__(self, name, global_vars):
         super(Backend, self).__init__()
         self.module = llvm.Module(name=name)
         self.builder = None
         self.func = None
+        self.function_type = None
+        self.global_vars = {}
         self.symbol_table = {}
         self.prologue = None
 
+        for name, typ in global_vars.items():
+            self.global_vars[name] = llvm.Function(self.module, typ, name)
+
     @staticmethod
-    def generate_llvm(func):
-        visitor = Backend(func.name)
+    def generate_llvm(func, global_vars):
+        visitor = Backend(func.name, global_vars)
         visitor.visit(func)
-        return visitor.module
+        return (visitor.module, visitor.function_type)
 
     def visit_FuncDef(self, node):
-        function_type = node.signature
+        self.function_type = function_type = node.signature
 
         # Create the function from the module and signature
         self.func = llvm.Function(self.module, function_type, node.name)
@@ -236,6 +241,8 @@ class Backend(ast.NodeVisitor):
             index = self.visit(ref.index)
             if vtype == TypeChecker.bool_type:
                 sz = 1
+            elif vtype == TypeChecker.float_type:
+                sz = 8
             else:
                 sz = 4
             index = self.builder.mul(index, self.const(sz))
