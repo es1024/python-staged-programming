@@ -59,6 +59,9 @@ class Backend(ast.NodeVisitor):
             return self.builder.call(self.global_vars[node.name], node.args)
         raise NotImplementedError('function being called missing')
 
+    def visit_Array(self, node):
+        return llvm.Constant(node.type, node.elts)
+
     def const(self, v):
         if type(v) == int:
             return llvm.Constant(TypeChecker.int_type, v)

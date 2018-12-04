@@ -41,6 +41,15 @@ class TypeChecker(ast.NodeVisitor):
         node.type = self.symbol_table[node.name].return_type
         return node.type
 
+    def visit_Array(self, node):
+        if len(self.node.elts) == 0:
+            raise NotImplementedError('array declared empty without type')
+        typ = self.visit(self.node.elts[0])
+        for i in node.elts:
+            if typ != self.visit(i):
+                raise NotImplementedError('array contains multiple types')
+        return llvm.ArrayType(typ, len(self.node.elts))
+
     def visit_BinOp(self, node):
         left = self.visit(node.left)
         right = self.visit(node.right)
