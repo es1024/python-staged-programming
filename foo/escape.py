@@ -69,6 +69,8 @@ class ProcessEscape(SubexprVisitor):
             if n not in self.globals and n not in _locals:
                 _locals[n] = q[name[n]]
         ev = eval(astunparse.unparse(node), self.globals, _locals)
+        if hasattr(ev, 'is_foo') and ev.is_foo:
+            return node
         x = self.visit(to_ast(ev))
         return x
 

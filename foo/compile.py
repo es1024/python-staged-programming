@@ -102,6 +102,7 @@ def _foo(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
         native_runner = functools.partial(run_marshalled, llvm_mod.functions[-1], func_ptr)
         native_runner.interpret = interpret
         native_runner.py = f
+        native_runner.is_foo = True
         return native_runner
     else:
         # convert ast -> python and exec it
