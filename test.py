@@ -19,6 +19,18 @@ def call_test() -> int:
     return five
 
 @foo
+def array1_test(a: [int]) -> int:
+    b = [1,2,3]
+    c = a[0] + b[2]
+    d = b[1] + c
+    b[2] = d
+    return d
+
+@foo
+def array2_test(a: [int]) -> [int]:
+    return a
+
+@foo
 def mse(a: float, b: float) -> float:
     return {gen_square(a)} - {gen_square(b)}
 

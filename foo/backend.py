@@ -60,7 +60,7 @@ class Backend(ast.NodeVisitor):
         raise NotImplementedError('function being called missing')
 
     def visit_Array(self, node):
-        return llvm.Constant(node.type, node.elts)
+        return llvm.Constant.literal_array([self.visit(i) for i in node.elts])
 
     def const(self, v):
         if type(v) == int:
@@ -259,7 +259,10 @@ class Backend(ast.NodeVisitor):
             addr = self.builder.inttoptr(addr, vtype.as_pointer())
             self.builder.store(v, addr)
         else:
-            self.symbol_table[ref.name] = v
+            if isinstance(vtype, llvm.ArrayType):
+                self.symbol_table[ref.name] = self.builder.inttoptr(v.constant[0], vtype.as_pointer())
+            else:
+                self.symbol_table[ref.name] = v
 
     def visit_Assign(self, node):
         v = self.visit(node.val)

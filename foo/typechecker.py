@@ -151,7 +151,7 @@ class TypeChecker(ast.NodeVisitor):
             if node.ref.index is None:
                 ltype = self.symbol_table[node.ref.name]
             else:
-                ltype = self.symbol_table[node.ref.name].pointee
+                ltype = self.symbol_table[node.ref.name].element
             rtype = self.visit(node.val)
             if ltype != rtype:
                 raise TypeError('type mismatch in assignment')
