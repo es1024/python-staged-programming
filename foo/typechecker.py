@@ -61,7 +61,13 @@ class TypeChecker(ast.NodeVisitor):
 
     @assign
     def visit_FuncCall(self, node):
-        if node.name not in self.symbol_table:
+        if node.name == "create_int_array":
+            return llvm.PointerType(self.int_type)
+        elif node.name == "create_float_array":
+            return llvm.PointerType(self.float_type)
+        elif node.name == "create_bool_array":
+            return llvm.PointerType(self.bool_type)
+        elif node.name not in self.symbol_table:
             raise NotImplementedError('function not found')
         return self.symbol_table[node.name].return_type
     
@@ -73,7 +79,7 @@ class TypeChecker(ast.NodeVisitor):
         for i in node.elts:
             if typ != self.visit(i):
                 raise NotImplementedError('array contains multiple types')
-        return llvm.ArrayType(typ, len(node.elts))
+        return llvm.PointerType(typ)
 
     @assign
     def visit_UnOp(self, node):
@@ -125,8 +131,8 @@ class TypeChecker(ast.NodeVisitor):
             raise TypeError('cannot dereference int/float/bool')
         if self.visit(node.index) != self.int_type:
             raise TypeError('cannot use non-integer indices')
-        if isinstance(rtype, llvm.ArrayType):
-            return rtype.element
+        if isinstance(rtype, llvm.PointerType):
+            return rtype.pointee
         return rtype.pointee 
 
     @assign
@@ -151,7 +157,7 @@ class TypeChecker(ast.NodeVisitor):
             if node.ref.index is None:
                 ltype = self.symbol_table[node.ref.name]
             else:
-                ltype = self.symbol_table[node.ref.name].element
+                ltype = self.symbol_table[node.ref.name].pointee
             rtype = self.visit(node.val)
             if ltype != rtype:
                 raise TypeError('type mismatch in assignment')

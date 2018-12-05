@@ -10,6 +10,12 @@ with q as block_of_code:
     b = a + 3
 
 @foo
+def create_len_array(n: int) -> float:
+    a =  create_float_array(5)
+    a[4] = 5.5
+    return a[4]
+
+@foo
 def ret5() -> int:
     return 5
 
@@ -19,11 +25,15 @@ def call_test() -> int:
     return five
 
 @foo
+def index_test(a: [int]) -> int:
+    a[1] = 1
+    return a[1]
+@foo
 def array1_test(a: [int]) -> int:
     b = [1,2,3]
-    c = a[0] + b[2]
+    c = b[1] + b[2]
     d = b[1] + c
-    b[2] = d
+    b[2] = d + a[0]
     return d
 
 @foo
@@ -53,3 +63,6 @@ print(test_block_quotes(2))
 a = 3
 print(test_block_quotes_captured())
 print(test_block_quotes(2))
+print(index_test([1,2,3]))
+print(array1_test([5,5,5]))
+print(create_len_array(1))

@@ -4,7 +4,7 @@ import functools
 import llvmlite.ir as llvm
 
 from .typechecker import TypeChecker
-from .irtypes import Uop, Bop, Cop, Ref
+from .irtypes import Uop, Bop, Cop, Ref, IntConst
 
 
 class Backend(ast.NodeVisitor):
@@ -39,7 +39,6 @@ class Backend(ast.NodeVisitor):
         args = self.func.args
         for name, arg in zip(node.args, args):
             self.symbol_table[name] = arg
-
         self.visit(node.body)
         self.builder.unreachable()
 
@@ -55,12 +54,22 @@ class Backend(ast.NodeVisitor):
             self.visit(b)
 
     def visit_FuncCall(self, node):
-        if node.name in self.global_vars:
+        if node.name == "create_int_array" or node.name == "create_float_array" or node.name == "create_bool_array":
+            if len(node.args) == 1:
+                v = node.args[0]
+                if isinstance(v, IntConst):
+                    return self.builder.alloca(node.type.pointee, v.val)
+            raise NotImplementedError('creating array function takes in a single int constant')
+        elif node.name in self.global_vars:
             return self.builder.call(self.global_vars[node.name], node.args)
         raise NotImplementedError('function being called missing')
 
     def visit_Array(self, node):
-        return llvm.Constant.literal_array([self.visit(i) for i in node.elts])
+        ptr = self.builder.alloca(node.type.pointee, len(node.elts))
+        for i in range(len(node.elts)):
+            ptr_shift = self.builder.gep(ptr, [self.const(i)])
+            self.builder.store(self.visit(node.elts[i]), ptr_shift)
+        return ptr
 
     def const(self, v):
         if type(v) == int:
@@ -205,18 +214,8 @@ class Backend(ast.NodeVisitor):
         if node.index is None:
             return base
         index = self.visit(node.index)
-        if node.type == TypeChecker.bool_type:
-            sz = 1
-        elif node.type == TypeChecker.float_type:
-            sz = 8
-        else:
-            sz = 4
-        # index = self.builder.mul(index, self.const(sz))
-        base = self.builder.ptrtoint(base, TypeChecker.int_type)
-        addr = self.builder.add(base, index)
-        addr = self.builder.inttoptr(addr, node.type.as_pointer())
-        return self.builder.load(addr)
-
+        ptr = self.builder.gep(self.symbol_table[node.name], [self.visit(node.index)])
+        return self.builder.load(ptr)
     def visit_CastToFloat(self, node):
         if node.expr.type == TypeChecker.float_type:
             return self.visit(node.expr)
@@ -245,24 +244,11 @@ class Backend(ast.NodeVisitor):
             if ref.index is None:
                 self.symbol_table[ref.name] = v
                 return
-            base = self.symbol_table[ref.name]
-            index = self.visit(ref.index)
-            if vtype == TypeChecker.bool_type:
-                sz = 1
-            elif vtype == TypeChecker.float_type:
-                sz = 8
-            else:
-                sz = 4
-            index = self.builder.mul(index, self.const(sz))
-            base = self.builder.ptrtoint(base, TypeChecker.int_type)
-            addr = self.builder.add(base, index)
-            addr = self.builder.inttoptr(addr, vtype.as_pointer())
-            self.builder.store(v, addr)
+            ptr = self.builder.gep(self.symbol_table[ref.name], [self.visit(ref.index)])
+            self.builder.store(v, ptr)
+ 
         else:
-            if isinstance(vtype, llvm.ArrayType):
-                self.symbol_table[ref.name] = self.builder.inttoptr(v.constant[0], vtype.as_pointer())
-            else:
-                self.symbol_table[ref.name] = v
+            self.symbol_table[ref.name] = v
 
     def visit_Assign(self, node):
         v = self.visit(node.val)
