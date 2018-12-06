@@ -69,6 +69,7 @@ class TypeChecker(ast.NodeVisitor):
             return llvm.PointerType(self.bool_type)
         elif node.name not in self.symbol_table:
             raise NotImplementedError('function not found')
+        # TODO typecheck arguments
         for arg in node.args:
             self.visit(arg)
         return self.symbol_table[node.name].return_type

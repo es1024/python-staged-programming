@@ -36,6 +36,9 @@ class SubexprVisitor(ast.NodeVisitor):
     def visit_Name(self, node):
         return node
 
+    def visit_Str(self, node):
+        return node
+
     def visit_list(self, nodes):
         r = list(map(self.visit, nodes))
         return r
@@ -56,6 +59,8 @@ def to_ast(maybe_ast):
         return maybe_ast
     elif isinstance(maybe_ast, list):
         return list(map(to_ast, maybe_ast))
+    elif hasattr(maybe_ast, 'is_foo') and maybe_ast.is_foo:
+        return q[name[maybe_ast.foo_name]]
     else:
         return q[u[maybe_ast]]
 
@@ -67,6 +72,8 @@ class ProcessEscape(SubexprVisitor):
         self.globals = _globals.copy()
         self.locals = _locals.copy()
         self.names = set(list(params))
+        self.locals['goto'] = q[goto]
+        self.locals['label'] = q[label]
         for p in params:
             self.locals[p] = q[name[p]]
 

@@ -15,6 +15,7 @@ from .marshalling import MarshalledArg
 from .typechecker import TypeChecker
 
 global_vars = {}
+anon_id = 0
 
 @functools.lru_cache()
 def get_jit_engine():
@@ -70,11 +71,18 @@ class _FuncCallExtractor(SubexprVisitor):
 
     def visit_Call(self, node):
         self.generic_visit(node)
-        self.calls.add(node.func.id)
+        blacklist = set((
+            'create_int_array',
+            'create_float_array',
+            'create_bool_array',
+            'range'
+        ))
+        if node.func.id not in blacklist:
+            self.calls.add(node.func.id)
         return node
 
 def _foo(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=False,
-         dump_llvm=False, dump_opt=False, depth=1):
+         dump_llvm=False, dump_opt=False, anonymous=False, depth=1):
     # get caller's globals and locals for escape evaluation
     _globals = inspect.stack()[depth][0].f_globals
     _locals = inspect.stack()[depth][0].f_locals
@@ -104,8 +112,6 @@ def _foo(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=Fals
         yield
 
     for dep in deps:
-        if dep in ('create_int_array', 'create_float_array', 'create_bool_array'):
-            continue
         dp = eval(dep, _globals, _locals)
         if dep != f.__name__ and not dp.is_compiled:
             dp.compile()
@@ -118,7 +124,8 @@ def _foo(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=Fals
             print(astor.dump_tree(func))
 
         llvm_mod, ftype = Backend.generate_llvm(func, global_vars)
-        global_vars[global_name] = ftype
+        if not anonymous:
+            global_vars[global_name] = ftype
         if dump_llvm:
             print(str(llvm_mod))
 
@@ -135,7 +142,13 @@ def _foo(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=Fals
         native_runner.is_compiled = True
         def compile_inner(*args, **kwargs):
             raise RuntimeError("already compiled")
-        native_runner.compile = compile_inner 
+        native_runner.compile = compile_inner
+        if anonymous:
+            global anon_id
+            native_runner.foo_name = '<anonymous_{}>'.format(anon_id)
+            anon_id += 1
+        else:
+            native_runner.foo_name = global_name
         return native_runner
     else:
         # convert ast -> python and exec it
@@ -165,6 +178,7 @@ def foo(*args, **kwargs):
             inner.is_defined = True
             inner.is_compiled = False
             inner.func = gen
+            inner.foo_name = args[0].__name__
             def compile_inner(inner):
                 if inner.is_compiled:
                     raise RuntimeError("already compiiled")
@@ -206,7 +220,6 @@ class _FuncDefTypeExtractor(SubexprVisitor):
         return node
 
 def ___declare(f):
-    # get caller's globals and locals for escape evaluation
     source = inspect.getsource(f)
     base_indent = len(source) - len(source.lstrip())
     lines = map(lambda _: _[base_indent:], source.split('\n'))
@@ -225,10 +238,11 @@ def ___declare(f):
     inner.is_foo = True
     inner.is_defined = False
     inner.is_compiled = False
-    
+
     def compile_inner(*args, **kwargs):
         raise RuntimeError('cannot compile undefined function')
     inner.compile = compile_inner
+    inner.foo_name = global_name
 
     return inner
 
@@ -236,11 +250,42 @@ def __declare(*args, **kwargs):
     if len(args) == 1:
         return ___declare(args[0], **kwargs)
     else:
-        return functools.partial(___declare, **kwargs)
+        return functools.partial(__declare, **kwargs)
+
+def ___native(f):
+    source = inspect.getsource(f)
+    base_indent = len(source) - len(source.lstrip())
+    lines = map(lambda _: _[base_indent:], source.split('\n'))
+    source = '\n'.join(lines).strip()
+    parse_tree = ast.parse(source).body[0]
+
+    global_name = f.__name__
+
+    extract = _FuncDefTypeExtractor()
+    extract.visit(parse_tree)
+
+    global_vars[global_name] = extract.type
+
+    def inner(*args, **kwargs):
+        raise NotImplementedError('calling native function from python not supported')
+    inner.is_foo = True
+    inner.is_defined = True
+    inner.is_compiled = True
+    inner.foo_name = global_name
+
+    def compile_inner(*args, **kwargs):
+        raise RuntimeError('cannot compile native function declaration')
+    inner.compile = compile_inner
+
+    return inner
 
 def __native(*args, **kwargs):
-    raise NotImplementedError('todo')
+    if len(args) == 1:
+        return ___native(args[0], **kwargs)
+    else:
+        return functools.partial(__native, **kwargs)
 
 foo.declare = __declare
 foo.native = __native
+foo.anonymous = functools.partial(foo, anonymous=True)
 

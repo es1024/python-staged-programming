@@ -1,4 +1,4 @@
-from foo import foo
+from foo import *
 from foo.quote import macros, q
 """
 ilocal stmts = terralib.newlist()
@@ -32,42 +32,60 @@ ilocal stmts = terralib.newlist()
     end
 """
 
+@foo.native
+def putchar(n: int) -> int: pass
+
+@foo.native
+def getchar() -> int: pass
+
 def compile(code, N):
     def body(data, ptr):
-        stmts = [] # ???
+        stmts = []
+        jump_i = 0
+        jumpstack = []
         for i in range(len(code)):
             c = code[i]
             if c == '>':
-                with q as stmt: ptr = ptr + 1
+                with q as stmt: ptr = (ptr + 1) % N
             elif c == '<':
-                with q as stmt: ptr = ptr - 1
+                with q as stmt: ptr = (ptr + N - 1) % N
             elif c == '+':
-                with q as stmt: data[ptr] = data[ptr] + 1
+                with q as stmt: data[ptr] = (data[ptr] + 1) % 256
             elif c == '-':
-                with q as stmt: data[ptr] = data[ptr] - 1
+                with q as stmt: data[ptr] = (data[ptr] + 255) % 256
             elif c == '.':
-                raise NotImplementedError
+                with q as stmt: _ = putchar(data[ptr])
             elif c == ',':
-                raise NotImplementedError
+                with q as stmt: data[ptr] = getchar() % 256
             elif c == '[':
-                raise NotImplementedError
+                target = ('before_' + str(jump_i), 'after_' + str(jump_i))
+                jumpstack.append(target)
+                jump_i += 1
+                with q as stmt:
+                    label ^(u[target[0]])
+                    if data[ptr] == 0:
+                        goto ^(u[target[1]])
             elif c == ']':
-                raise NotImplementedError
+                target = jumpstack.pop()
+                with q as stmt:
+                    goto ^(u[target[0]])
+                    label ^(u[target[1]])
+            else:
+                continue
             stmts.append(stmt)
         return stmts
 
-    data = [0] * N
-
-    @foo(dump_unescaped=True, dump_llvm=True)
-    def inner(data: [int]) -> int:
+    @foo.anonymous(dump_unescaped=True, dump_llvm=True)
+    def inner() -> int:
+        data = create_int_array(N)
         for i in range(N):
             data[i] = 0
         ptr = 0
         { body(data, ptr) }
         return data[ptr]
 
-    return lambda: inner(data)
+    return inner
 
-# z = compile('+++++>++<+', 2)
-# print(z())
+hello_world = compile('++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.', 256)
+print(hello_world())
 

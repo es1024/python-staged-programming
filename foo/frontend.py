@@ -41,11 +41,15 @@ class Frontend(ast.NodeVisitor):
         raise NotImplementedError('Problem with function name: ' + ast.dump(node))
 
     def visit_List(self, node):
-        return ir.Array([self.visit(elt) for elt in node.elts]) 
+        return ir.Array([self.visit(elt) for elt in node.elts])
 
     def visit_BinOp(self, node):
         # BinOp(expr left, operator op, expr right)
         # operator = Add | Sub | Mult | MatMult | Div | Mod | Pow | LShift | RShift | BitOr | BitXor | BitAnd | FloorDiv
+        # goto handling
+        if type(node.op) == ast.BitXor:
+            return self.visit_GotoLabel(node)
+        # normal ops
         translate_op = {ast.Add: ir.Bop.Add, ast.Sub: ir.Bop.Sub, ast.Mult: ir.Bop.Mul,
                         ast.Div: ir.Bop.Div, ast.Mod: ir.Bop.Mod}
         op = translate_op.get(type(node.op), None)
@@ -216,4 +220,15 @@ class Frontend(ast.NodeVisitor):
             return ir.Block([self.visit(v) for v in node.value])
         else:
             return ir.Block([self.visit(node.value)])
+
+    def visit_GotoLabel(self, node):
+        if type(node.left) != ast.Name or node.left.id not in ('goto', 'label') \
+                or type(node.right) not in (ast.Name, ast.Str):
+            raise NotImplementedError('^ only allowed for goto/label')
+    
+        label = node.right.id if type(node.right) == ast.Name else node.right.s
+        if node.left.id == 'goto':
+            return ir.Goto(label)
+        else:
+            return ir.Label(label)
 

@@ -21,6 +21,8 @@ Stmt = Assign(Ref ref, Expr val)
      | For(Str var, Expr min, Expr max, Stmt body)
      | Return(Expr val)
      | FuncDef(Str name, Str* args, Stmt body)
+     | Label(Str name)
+     | Goto(Str name)
 """
 
 class Uop(Enum):
@@ -119,4 +121,10 @@ class Block(ast.AST):
 
 class FuncDef(ast.AST):
     _fields = ['name', 'args', 'body']
+
+class Label(ast.AST):
+    _fields = ['name']
+
+class Goto(ast.AST):
+    _fields = ['name']
 

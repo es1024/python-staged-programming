@@ -16,6 +16,7 @@ class Backend(ast.NodeVisitor):
         self.function_type = None
         self.global_vars = global_vars.copy()
         self.symbol_table = {}
+        self.label_table = {}
         self.prologue = None
 
     @staticmethod
@@ -27,13 +28,11 @@ class Backend(ast.NodeVisitor):
     def visit_FuncDef(self, node):
         for name, typ in self.global_vars.items():
             if name != node.name:
-                print(name, typ)
                 self.global_vars[name] = llvm.Function(self.module, typ, name)
 
         self.function_type = function_type = node.signature
 
         # Create the function from the module and signature
-        print(function_type)
         self.func = llvm.Function(self.module, function_type, node.name)
         self.global_vars[node.name] = self.func
 
@@ -251,7 +250,7 @@ class Backend(ast.NodeVisitor):
                 return
             ptr = self.builder.gep(self.symbol_table[ref.name], [self.visit(ref.index)])
             self.builder.store(v, ptr)
- 
+
         else:
             self.symbol_table[ref.name] = v
 
@@ -363,4 +362,48 @@ class Backend(ast.NodeVisitor):
     def generic_visit(self, node):
         raise NotImplementedError
 
+    def visit_Label(self, node):
+        if node.name not in self.label_table:
+            self.label_table[node.name] = (self.func.append_basic_block(),
+                    self.func.append_basic_block(),
+                    self.builder.block, self.symbol_table.copy())
+            nblock = self.label_table[node.name][0]
+            self.builder.branch(nblock)
+            self.builder = llvm.IRBuilder(self.label_table[node.name][1])
+        else:
+            nblock, oldblock, oldst = self.label_table[node.name]
+            newblock = self.builder.block
+            self.builder.branch(nblock)
+            self.builder = llvm.IRBuilder(nblock)
+            self.add_goto_phi(oldblock, oldst, newblock)
+
+    def visit_Goto(self, node):
+        if node.name not in self.label_table:
+            self.label_table[node.name] = (self.func.append_basic_block(),
+                    self.builder.block, self.symbol_table.copy())
+            nblock = self.label_table[node.name][0]
+            self.builder.branch(nblock)
+            self.builder = llvm.IRBuilder(self.func.append_basic_block())
+        else:
+            nblock, endblock, oldblock, oldst = self.label_table[node.name]
+            newblock = self.builder.block
+            self.builder.branch(nblock)
+            self.builder = llvm.IRBuilder(nblock)
+            self.add_goto_phi(oldblock, oldst, newblock)
+            self.builder.branch(endblock)
+            self.builder = llvm.IRBuilder(self.func.append_basic_block())
+
+    def add_goto_phi(self, oldblock, oldst, newblock):
+        # TODO allow many-many goto to label matching, currently only supporting 1:1
+        old_sk = set(oldst.keys())
+        new_sk = set(self.symbol_table.keys())
+        for k in new_sk:
+            typ = self.symbol_table[k].type
+            phi = self.builder.phi(typ)
+            if k in old_sk:
+                phi.add_incoming(oldst[k], oldblock)
+            else:
+                phi.add_incoming(llvm.Constant(typ, 0), oldblock)
+            phi.add_incoming(self.symbol_table[k], newblock)
+            self.symbol_table[k] = phi
 
