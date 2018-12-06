@@ -66,3 +66,26 @@ print(test_block_quotes(2))
 print(index_test([1,2,3]))
 print(array1_test([5,5,5]))
 print(create_len_array(1))
+
+
+@foo.declare
+def factorial1(n: int) -> int:
+    pass
+
+@foo.declare
+def factorial2(n: int) -> int:
+    pass
+
+@foo(dump_unescaped=True, dump_llvm=True)
+def factorial1(n: int) -> int:
+    if n == 1:
+        return 1
+    return n * factorial2(n - 1)
+
+@foo(dump_unescaped=True, dump_llvm=True)
+def factorial2(n: int) -> int:
+    if n == 1:
+        return 1
+    return n * factorial2(n - 1)
+print([factorial1(i) for i in range(1, 10)])
+
