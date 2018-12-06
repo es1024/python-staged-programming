@@ -207,8 +207,6 @@ class LLVMTypeBuilder(ast.NodeVisitor):
         raise NotImplementedError('Type names must be either int or float')
 
     def visit_List(self, node: ast.List):
-        if len(node.elts) != 1 or not isinstance(node.elts[0], ast.Name):
-            raise NotImplementedError('only Lists over simple types allowed')
         return llvm.PointerType(self.visit(node.elts[0]))
 
     def generic_visit(self, node):

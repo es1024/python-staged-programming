@@ -33,22 +33,27 @@ class MarshalledArg(object):
                 return ctypes.c_char
         if isinstance(ir_type, llvm.DoubleType):
             return ctypes.c_double
-        if isinstance(ir_type, llvm.PointerType) and not in_ptr:
+        if isinstance(ir_type, llvm.PointerType):
             return ctypes.POINTER(MarshalledArg.to_ctype(ir_type.pointee, in_ptr=True))
         raise NotImplementedError('No ctype available for {}'.format(ir_type))
 
-    def wrap_value(self, arg):
-        if self.llvm_ty == TypeChecker.int_type and isinstance(arg, int):
+    def wrap_value(self, arg, helper=None):
+        if helper == None:
+            helper = self.llvm_ty
+
+        if helper == TypeChecker.int_type and isinstance(arg, int):
             return arg
-        if self.llvm_ty == TypeChecker.bool_type and isinstance(arg, bool):
+        if helper == TypeChecker.bool_type and isinstance(arg, bool):
             return arg
-        if self.llvm_ty == TypeChecker.float_type and isinstance(arg, float):
+        if helper == TypeChecker.float_type and isinstance(arg, float):
             return arg
         if isinstance(self.llvm_ty, llvm.PointerType):
             el_ty = self.to_ctype(self.llvm_ty.pointee)
             self.copy_back = True
             if isinstance(arg, list):
-                return ctypes.cast((el_ty * len(arg))(*arg), self.ctype)
+                if isinstance(arg[0], list):
+                    return ctypes.cast((self.to_ctype(helper.pointee)*len(arg))(*[self.wrap_value(i, helper.pointee) for i in arg]), self.to_ctype(helper))
+                return ctypes.cast((self.to_ctype(helper.pointee) * len(arg))(*arg), self.to_ctype(helper))
             elif isinstance(arg, numpy.ndarray):
                 if el_ty == ctypes.c_double and arg.dtype != numpy.double:
                     raise ValueError('expected double ndarray, got {}'.format(arg.dtype))
