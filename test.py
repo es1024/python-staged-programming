@@ -72,3 +72,26 @@ print(array1_test([5,5,5]))
 print(create_len_array(1))
 print(array_of_array([[1,2,3,4],[5,6,7,8],[4,7,8]]))
 print(call_test())
+
+
+@foo.declare
+def factorial1(n: int) -> int:
+    pass
+
+@foo.declare
+def factorial2(n: int) -> int:
+    pass
+
+@foo(dump_unescaped=True, dump_llvm=True)
+def factorial1(n: int) -> int:
+    if n == 1:
+        return 1
+    return n * factorial2(n - 1)
+
+@foo(dump_unescaped=True, dump_llvm=True)
+def factorial2(n: int) -> int:
+    if n == 1:
+        return 1
+    return n * factorial2(n - 1)
+print([factorial1(i) for i in range(1, 10)])
+

@@ -33,6 +33,9 @@ class SubexprVisitor(ast.NodeVisitor):
     def visit_Num(self, node):
         return node
 
+    def visit_Name(self, node):
+        return node
+
     def visit_list(self, nodes):
         r = list(map(self.visit, nodes))
         return r

@@ -14,12 +14,9 @@ class Backend(ast.NodeVisitor):
         self.builder = None
         self.func = None
         self.function_type = None
-        self.global_vars = {}
+        self.global_vars = global_vars.copy()
         self.symbol_table = {}
         self.prologue = None
-
-        for name, typ in global_vars.items():
-            self.global_vars[name] = llvm.Function(self.module, typ, name)
 
     @staticmethod
     def generate_llvm(func, global_vars):
@@ -28,10 +25,17 @@ class Backend(ast.NodeVisitor):
         return (visitor.module, visitor.function_type)
 
     def visit_FuncDef(self, node):
+        for name, typ in self.global_vars.items():
+            if name != node.name:
+                print(name, typ)
+                self.global_vars[name] = llvm.Function(self.module, typ, name)
+
         self.function_type = function_type = node.signature
 
         # Create the function from the module and signature
+        print(function_type)
         self.func = llvm.Function(self.module, function_type, node.name)
+        self.global_vars[node.name] = self.func
 
         prologue = self.func.append_basic_block()
         self.builder = llvm.IRBuilder(prologue)
@@ -61,6 +65,7 @@ class Backend(ast.NodeVisitor):
                     return self.builder.alloca(node.type.pointee, v.val)
             raise NotImplementedError('creating array function takes in a single int constant')
         elif node.name in self.global_vars:
+            node.args = list(map(self.visit, node.args))
             return self.builder.call(self.global_vars[node.name], node.args)
         raise NotImplementedError('function being called missing')
 

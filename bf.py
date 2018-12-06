@@ -31,6 +31,7 @@ ilocal stmts = terralib.newlist()
         stmts:insert(stmt)
     end
 """
+
 def compile(code, N):
     def body(data, ptr):
         stmts = [] # ???
@@ -57,7 +58,7 @@ def compile(code, N):
 
     data = [0] * N
 
-    @foo(dump_llvm=True)
+    @foo(dump_unescaped=True, dump_llvm=True)
     def inner(data: [int]) -> int:
         for i in range(N):
             data[i] = 0
@@ -67,6 +68,6 @@ def compile(code, N):
 
     return lambda: inner(data)
 
-z = compile('+', 2)
-print(z())
+# z = compile('+++++>++<+', 2)
+# print(z())
 
