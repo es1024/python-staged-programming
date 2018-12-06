@@ -75,7 +75,7 @@ def compile(code, N):
             stmts.append(stmt)
         return stmts
 
-    @foo.anonymous(dump_unescaped=True, dump_llvm=True)
+    @foo.anonymous
     def inner() -> int:
         data = create_int_array(N)
         for i in range(N):
@@ -87,5 +87,5 @@ def compile(code, N):
     return inner
 
 hello_world = compile('++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.', 256)
-print(hello_world())
+hello_world()
 
