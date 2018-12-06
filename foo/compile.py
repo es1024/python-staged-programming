@@ -205,8 +205,7 @@ class _FuncDefTypeExtractor(SubexprVisitor):
         self.type = llvm.FunctionType(ret, tuple(args))
         return node
 
-def ___declare(f, generate_llvm=True, dump_unescaped=False, dump_ir=False,
-         dump_llvm=False, dump_opt=False, depth=1):
+def ___declare(f):
     # get caller's globals and locals for escape evaluation
     source = inspect.getsource(f)
     base_indent = len(source) - len(source.lstrip())
