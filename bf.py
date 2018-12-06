@@ -19,13 +19,13 @@ def compile(code, N):
             elif c == '<':
                 with q as stmt: ptr = (ptr + N - 1) % N
             elif c == '+':
-                with q as stmt: data[ptr] = (data[ptr] + 1) % 256
+                with q as stmt: data[ptr] = data[ptr] + 1
             elif c == '-':
-                with q as stmt: data[ptr] = (data[ptr] + 255) % 256
+                with q as stmt: data[ptr] = data[ptr] - 1
             elif c == '.':
                 with q as stmt: _ = putchar(data[ptr])
             elif c == ',':
-                with q as stmt: data[ptr] = getchar() % 256
+                with q as stmt: data[ptr] = getchar()
             elif c == '[':
                 target = ('before_' + str(jump_i), 'after_' + str(jump_i))
                 jumpstack.append(target)
@@ -55,8 +55,16 @@ def compile(code, N):
 
     return inner
 
-hello_world = compile('++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.', 256)
-hello_world()
-# cat = compile(',+[-.,+]', 1)
+# hello_world = compile('++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.', 256)
+# hello_world()
+print_0 = compile('+++++++[>+++++++<-]>-.', 2)
+print_0()
+print_0()
+print_0()
+cat = compile(',+[-.,+]', 1)
+cat.compile()
+print(print_0.llvm())
+print(print_0.opcode())
+print(cat.opcode())
 # cat()
 

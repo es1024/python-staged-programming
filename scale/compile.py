@@ -46,7 +46,7 @@ def register_module(llvm_mod, dump_llvm=False):
         print(native_mod)
     engine.add_module(native_mod)
     engine.finalize_object()
-    return engine.get_function_address(llvm_mod.functions[-1].name)
+    return engine.get_function_address(llvm_mod.functions[-1].name), native_mod
 
 def run_marshalled(func, func_ptr, *args):
     # Gather argument types
@@ -129,7 +129,7 @@ def _scale(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=Fa
         if dump_llvm:
             print(str(llvm_mod))
 
-        func_ptr = register_module(llvm_mod, dump_opt)
+        func_ptr, opcode = register_module(llvm_mod, dump_opt)
 
         def interpret(*interpret_args):
             return Interpreter().call_fun(func, *interpret_args)
@@ -140,6 +140,17 @@ def _scale(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=Fa
         native_runner.is_scale = True
         native_runner.is_defined = True
         native_runner.is_compiled = True
+        def gen_pretty():
+            import astunparse
+            processed_src = astunparse.unparse(unescaped.body).strip()
+            header_src = 'def ___{}_inner({}):\n{}'.format(
+                    f.__name__,
+                    ', '.join(params),
+                    '\n'.join(map(lambda x: '\t' + x, processed_src.split('\n'))))
+            return header_src
+        native_runner.pretty = gen_pretty
+        native_runner.llvm = lambda: str(list(llvm_mod.functions)[-1])
+        native_runner.opcode = lambda: str(list(opcode.functions)[-2])
         def compile_inner(*args, **kwargs):
             raise RuntimeError("already compiled")
         native_runner.compile = compile_inner
