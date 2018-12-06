@@ -81,7 +81,7 @@ class _FuncCallExtractor(SubexprVisitor):
             self.calls.add(node.func.id)
         return node
 
-def _foo(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=False,
+def _scale(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=False,
          dump_llvm=False, dump_opt=False, anonymous=False, depth=1):
     # get caller's globals and locals for escape evaluation
     _globals = inspect.stack()[depth][0].f_globals
@@ -137,7 +137,7 @@ def _foo(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=Fals
         native_runner = functools.partial(run_marshalled, llvm_mod.functions[-1], func_ptr)
         native_runner.interpret = interpret
         native_runner.py = f
-        native_runner.is_foo = True
+        native_runner.is_scale = True
         native_runner.is_defined = True
         native_runner.is_compiled = True
         def compile_inner(*args, **kwargs):
@@ -145,10 +145,10 @@ def _foo(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=Fals
         native_runner.compile = compile_inner
         if anonymous:
             global anon_id
-            native_runner.foo_name = '<anonymous_{}>'.format(anon_id)
+            native_runner.scale_name = '<anonymous_{}>'.format(anon_id)
             anon_id += 1
         else:
-            native_runner.foo_name = global_name
+            native_runner.scale_name = global_name
         return native_runner
     else:
         # convert ast -> python and exec it
@@ -161,10 +161,10 @@ def _foo(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=Fals
         exec(header_src, _globals, _locals)
         return _locals['___{}_inner'.format(f.__name__)]
 
-def foo(*args, **kwargs):
+def scale(*args, **kwargs):
     if len(args) == 1:
         kwargs['depth'] = 2
-        gen = _foo(args[0], **kwargs)
+        gen = _scale(args[0], **kwargs)
         try:
             next(gen)
         except StopIteration as e:
@@ -174,11 +174,11 @@ def foo(*args, **kwargs):
                 if not inner.is_compiled:
                     inner.compile()
                 return inner.func(*args, **kwargs)
-            inner.is_foo = True
+            inner.is_scale = True
             inner.is_defined = True
             inner.is_compiled = False
             inner.func = gen
-            inner.foo_name = args[0].__name__
+            inner.scale_name = args[0].__name__
             def compile_inner(inner):
                 if inner.is_compiled:
                     raise RuntimeError("already compiiled")
@@ -192,7 +192,7 @@ def foo(*args, **kwargs):
             inner.compile = functools.partial(compile_inner, inner)
             return inner
     else:
-        return functools.partial(foo, **kwargs)
+        return functools.partial(scale, **kwargs)
 
 class _FuncDefTypeExtractor(SubexprVisitor):
     def visit_List(self, node):
@@ -235,14 +235,14 @@ def ___declare(f):
 
     def inner(*args, **kwargs):
         raise RuntimeError('function only declared, not defined')
-    inner.is_foo = True
+    inner.is_scale = True
     inner.is_defined = False
     inner.is_compiled = False
 
     def compile_inner(*args, **kwargs):
         raise RuntimeError('cannot compile undefined function')
     inner.compile = compile_inner
-    inner.foo_name = global_name
+    inner.scale_name = global_name
 
     return inner
 
@@ -268,10 +268,10 @@ def ___native(f):
 
     def inner(*args, **kwargs):
         raise NotImplementedError('calling native function from python not supported')
-    inner.is_foo = True
+    inner.is_scale = True
     inner.is_defined = True
     inner.is_compiled = True
-    inner.foo_name = global_name
+    inner.scale_name = global_name
 
     def compile_inner(*args, **kwargs):
         raise RuntimeError('cannot compile native function declaration')
@@ -285,7 +285,7 @@ def __native(*args, **kwargs):
     else:
         return functools.partial(__native, **kwargs)
 
-foo.declare = __declare
-foo.native = __native
-foo.anonymous = functools.partial(foo, anonymous=True)
+scale.declare = __declare
+scale.native = __native
+scale.anonymous = functools.partial(scale, anonymous=True)
 
