@@ -1,36 +1,5 @@
 from foo import *
 from foo.quote import macros, q
-"""
-ilocal stmts = terralib.newlist()
-
-    --loop over each character in the BF code
-    for i = 1,#code do
-        local c = code:sub(i,i)
-        local stmt
-        --generate the corresponding Terra statement
-        --for each BF operator
-        if c == ">" then
-            stmt = quote ptr = ptr + 1 end
-        elseif c == "<" then
-            stmt = quote ptr = ptr - 1 end
-        elseif c == "+" then
-            stmt = quote data[ptr] = data[ptr] + 1 end
-        elseif c == "-" then
-            stmt = quote data[ptr] = data[ptr] - 1 end
-        elseif c == "." then
-            stmt = quote C.putchar(data[ptr]) end
-        elseif c == "," then
-            stmt = quote data[ptr] = C.getchar() end
-        elseif c == "[" then
-            error("Implemented below")
-        elseif c == "]" then
-            error("Implemented below")
-        else
-            error("unknown character "..c)
-        end
-        stmts:insert(stmt)
-    end
-"""
 
 @foo.native
 def putchar(n: int) -> int: pass
@@ -88,4 +57,6 @@ def compile(code, N):
 
 hello_world = compile('++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.', 256)
 hello_world()
+# cat = compile(',+[-.,+]', 1)
+# cat()
 
