@@ -1,4 +1,4 @@
-from .compile import foo
+from .compile import scale
 from . import quote
 
 import ast as _ast

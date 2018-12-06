@@ -59,8 +59,8 @@ def to_ast(maybe_ast):
         return maybe_ast
     elif isinstance(maybe_ast, list):
         return list(map(to_ast, maybe_ast))
-    elif hasattr(maybe_ast, 'is_foo') and maybe_ast.is_foo:
-        return q[name[maybe_ast.foo_name]]
+    elif hasattr(maybe_ast, 'is_scale') and maybe_ast.is_scale:
+        return q[name[maybe_ast.scale_name]]
     else:
         return q[u[maybe_ast]]
 
@@ -93,7 +93,7 @@ class ProcessEscape(SubexprVisitor):
             if n not in self.globals and n not in _locals:
                 _locals[n] = q[name[n]]
         ev = eval(astunparse.unparse(node), self.globals, _locals)
-        if hasattr(ev, 'is_foo') and ev.is_foo:
+        if hasattr(ev, 'is_scale') and ev.is_scale:
             return node
         x = self.visit(to_ast(ev))
         try:

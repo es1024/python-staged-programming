@@ -1,5 +1,5 @@
-from foo import foo
-from foo.quote import macros, q
+from scale import scale
+from scale.quote import macros, q
 
 def gen_square(x):
     return q[x * x]
@@ -9,30 +9,30 @@ with q as block_of_code:
     a = a + 2
     b = a + 3
 
-@foo
+@scale
 def array_of_array(a: [[int]]) -> int:
     b = a[2]
     return b[2]
-@foo
+@scale
 def create_len_array(n: int) -> float:
     a =  create_float_array(5)
     a[4] = 5.5
     return a[4]
 
-@foo
+@scale
 def ret5() -> int:
     return 5
 
-@foo
+@scale
 def call_test() -> int:
     five = ret5()
     return five
 
-@foo
+@scale
 def index_test(a: [int]) -> int:
     a[1] = 1
     return a[1]
-@foo
+@scale
 def array1_test(a: [int]) -> int:
     b = [1,2,3]
     c = b[1] + b[2]
@@ -40,20 +40,20 @@ def array1_test(a: [int]) -> int:
     b[2] = d + a[0]
     return d
 
-@foo
+@scale
 def array2_test(a: [int]) -> [int]:
     return a
 
-@foo
+@scale
 def mse(a: float, b: float) -> float:
     return {gen_square(a)} - {gen_square(b)}
 
-@foo(dump_unescaped=True, dump_llvm=True)
+@scale(dump_unescaped=True, dump_llvm=True)
 def test_block_quotes(a: int) -> int:
     {block_of_code}
     return b
 
-@foo(dump_unescaped=True)
+@scale(dump_unescaped=True)
 def test_block_quotes_captured() -> int:
     {block_of_code}
     return b
@@ -74,21 +74,21 @@ print(array_of_array([[1,2,3,4],[5,6,7,8],[4,7,8]]))
 print(call_test())
 
 
-@foo.declare
+@scale.declare
 def factorial1(n: int) -> int:
     pass
 
-@foo.declare
+@scale.declare
 def factorial2(n: int) -> int:
     pass
 
-@foo(dump_unescaped=True, dump_llvm=True)
+@scale(dump_unescaped=True, dump_llvm=True)
 def factorial1(n: int) -> int:
     if n == 1:
         return 1
     return n * factorial2(n - 1)
 
-@foo(dump_unescaped=True, dump_llvm=True)
+@scale(dump_unescaped=True, dump_llvm=True)
 def factorial2(n: int) -> int:
     if n == 1:
         return 1

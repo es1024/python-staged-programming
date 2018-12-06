@@ -1,10 +1,10 @@
-from foo import *
-from foo.quote import macros, q
+from scale import *
+from scale.quote import macros, q
 
-@foo.native
+@scale.native
 def putchar(n: int) -> int: pass
 
-@foo.native
+@scale.native
 def getchar() -> int: pass
 
 def compile(code, N):
@@ -44,7 +44,7 @@ def compile(code, N):
             stmts.append(stmt)
         return stmts
 
-    @foo.anonymous
+    @scale.anonymous
     def inner() -> int:
         data = create_int_array(N)
         for i in range(N):
