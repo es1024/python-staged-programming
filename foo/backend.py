@@ -217,6 +217,12 @@ class Backend(ast.NodeVisitor):
         base = self.symbol_table[node.name]
         if node.index is None:
             return base
+        if isinstance(node.index.type, llvm.PointerType):
+            ptr = self.symbol_table[node.name]
+            for i in node.index.elts:
+                val = self.builder.load(self.builder.gep(ptr, [self.visit(i)]))
+            return self.builder.load(val)
+
         index = self.visit(node.index)
         ptr = self.builder.gep(self.symbol_table[node.name], [self.visit(node.index)])
         return self.builder.load(ptr)

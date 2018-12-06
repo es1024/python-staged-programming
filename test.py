@@ -1,5 +1,14 @@
 from foo import foo
 from foo.quote import macros, q
+import numpy as np
+
+@foo(dump_llvm=True)
+def laplace(img: [[float]], out: [[float]], l: int) -> int:
+    for i in range(l-2):
+        for j in range(l-2):
+            out[i,j] = img[i+0,j+1] + img[i+2,j+1] + img[i+1,j+2] + img[i+1,j+0] - 4 * img[i+1,j+1]
+    return 0
+print(laplace(np.random.rand(28,28).tolist(), np.zeros((26, 26)).tolist(), 28))
 
 def gen_square(x):
     return q[x * x]
@@ -8,6 +17,17 @@ a = 1
 with q as block_of_code:
     a = a + 2
     b = a + 3
+
+@foo
+def n1(x: int) -> int:
+    return x
+
+@foo
+def n2(x: int) -> int:
+    d = n1(x)
+    c = 1
+    return x
+n2.compile()
 
 @foo
 def array_of_array(a: [[int]]) -> int:
@@ -61,6 +81,7 @@ def test_block_quotes_captured() -> int:
 def python_mse(a: float, b: float) -> float:
     return a * a + b * b
 
+
 print(mse(4.0, 3.0))
 print(test_block_quotes_captured())
 print(test_block_quotes(2))
@@ -94,4 +115,3 @@ def factorial2(n: int) -> int:
         return 1
     return n * factorial2(n - 1)
 print([factorial1(i) for i in range(1, 10)])
-

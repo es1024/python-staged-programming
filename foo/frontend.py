@@ -120,13 +120,15 @@ class Frontend(ast.NodeVisitor):
         #  | ExtSlice(slice* dims)
         #  | Index(expr value)
         assert type(node.ctx) in {ast.Load, ast.Store}
-
         ref = self.visit(node.value)
         if not isinstance(ref, ir.Ref) or ref.index:
             raise NotImplementedError('Subscripts can only be applied to base names')
         if not isinstance(node.slice, ast.Index):
             raise NotImplementedError('Array slicing not supported. Can only use particular indices')
-        index = self.visit(node.slice.value)
+        if isinstance(node.slice.value, ast.Tuple):
+            index = ir.Array([self.visit(i) for i in node.slice.value.elts])
+        else:
+            index = self.visit(node.slice.value)
         ref.index = index
         return ref
 

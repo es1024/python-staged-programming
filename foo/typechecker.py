@@ -132,6 +132,11 @@ class TypeChecker(ast.NodeVisitor):
             return rtype
         if rtype in [self.int_type, self.float_type, self.bool_type]:
             raise TypeError('cannot dereference int/float/bool')
+        a = self.visit(node.index)
+        if isinstance(a, llvm.PointerType) and a.pointee == self.int_type:
+            for i in range(len(node.index.elts)):
+                rtype = rtype.pointee
+            return rtype
         if self.visit(node.index) != self.int_type:
             raise TypeError('cannot use non-integer indices')
         if isinstance(rtype, llvm.PointerType):
