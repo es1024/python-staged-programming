@@ -4,7 +4,6 @@ import numpy as np
 import ast
 import operator
 import re
-from PIL import Image
 
 # represents a node in the IR
 class IRNode:
@@ -15,7 +14,12 @@ class IRNode:
 
 # represents actual image data
 class ConcreteImage:
-    def __init__(self, filename):
+    def __init__(self, width=None, height=None, data=None):
+        self.width = width
+        self.height = height
+        self.data = data
+
+    def load(self, filename):
         with open(filename, "rb") as F:
             cur = None
 
@@ -87,7 +91,7 @@ class Image:
     def input(index):
         return Image(IRNode(kind='input', index=index))
 
-    def __toimage(x):
+    def toimage(x):
         if isinstance(x, Image):
             return x
         elif isinstance(x, int) or isinstance(x, float):
@@ -112,6 +116,33 @@ class Image:
 
     def shift(self, sx, sy):
         return Image(IRNode(kind='shift', sx=sx, sy=sy, value=self.tree))
+
+    def run(self, method, *args):
+        if not hasattr(self, method):
+            if method == 'recompute':
+                compile_ir = compile_ir_recompute
+            elif method == 'image_wide':
+                compile_ir = compile_ir_image_wide
+            elif method == 'blocked':
+                compile_ir = compile_ir_blocked
+            else:
+                raise ValueError("unknown method")
+            setattr(self, method, compile_ir(self.tree))
+            getattr(self, method).compile()
+        implementation = getattr(self, method)
+        imagedata = [None] * len(args)
+        width = None
+        height = None
+        for i, im in enumerate(args):
+            assert isinstance(im, ConcreteImage), "expected a concrete image"
+            width, height = width or im.wiidth, height or im.height
+            assert wiidth == im.width and height == im.height, "input size mismatch"
+            imagedata[i] = im.data
+        assert(width and height, "there must be at least one input image")
+        inputs = imagedata
+        result = ConcreteImage(width, height, inputs)
+        implementation(width, height, result.data, inputs)
+        return result
 
 @scale
 def load_data(W: int, H: int, data: [float], x: int, y: int) -> float:
@@ -216,53 +247,52 @@ def createloopir(method, tree):
     return loopir
 
 def compile_ir_image_wide(tree):
-    loopir = createloopir("image_wide",tree)
+    loopir = createloopir("image_wide", tree)
 
-    W,H,inputs = name[W],name[H],name[inputs]
-    output = name[output]
+    W, H, inputs = q[name[W]], q[name[H]], q[name[inputs]]
+    output = q[name[output]]
 
-    local statements = {}
-    local cleanup = {}
-    local temptoptr = {}
+    statements = []
+    cleanup = []
+    temptoptr = {}
     def gen_tree(tree,x,y):
         if tree.kind == "const":
             return q[float(tree.value)]
         elif tree.kind == "input":
-            return q[load_data(W,H,inputs[tree.index],x,y)]
+            return q[load_data(W,H,inputs[u[tree.index]],x,y)]
         elif tree.kind == "operator":
-            local lhs = gen_tree(tree.lhs,x,y)
-            local rhs = gen_tree(tree.rhs,x,y)
+            lhs = gen_tree(tree.lhs,x,y)
+            rhs = gen_tree(tree.rhs,x,y)
             return tree.op(lhs,rhs)
         elif tree.kind == "shift":
-            local xn,yn = q[x + tree.sx],q[y + tree.sy]
+            xn, yn = q[x + u[tree.sx]], q[y + u[tree.sy]]
             return gen_tree(tree.value,xn,yn)
         elif tree.kind == "loadtemp":
-            assert(temptoptr[tree.temp],"no temporary?")
-            local ptr = temptoptr[tree.temp]
+            assert temptoptr[tree.temp], "no temporary?"
+            ptr = temptoptr[tree.temp]
             return q[load_data(W,H,ptr,x,y)]
         else:
             raise Exception("unknown kind")
 
-    for i,loop in ipairs(loopir) do
-        local data = symbol(&float,"data")
-        local ptr
-        if loop.kind == "storetemp" then
-            ptr = `[&float](C.malloc(W*H*sizeof(float)))
-            table.insert(cleanup,quote
-                C.free(data)
-            end)
+    for i, loop in enumerate(loopir) do
+        data = q[name[data]]
+        if loop.kind == "storetemp":
+            ptr = q[float_malloc(W * H * 8)]
+            with q as cleanup_stmt:
+                _ = float_free(data)
+            cleanup.append(cleanup_stmt)
             temptoptr[loop] = data
-        elseif loop.kind == "storeresult" then
+        elif loop.kind == "storeresult" then
             ptr = output
-        end
-        local loopcode = quote
-            var [data] = ptr
+        with q as loopcode:
+            data = ptr
             for y in range(H):
                 for x in range(W):
-                    data[y*W+x] = [gen_tree(loop.value,x,y)]
-        table.insert(statements,loopcode)
-    @scale
-    def body(W: int, H: int, [output], [inputs] ) -> int:
+                    data[y*W+x] = u[gen_tree(loop.value,x,y)]
+        statements.append(loopcode)
+
+    @scale.anonymous
+    def body(W: int, H: int, output: [float], inputs: [[float]]) -> int:
         [statements]
         [cleanup]
         return 0
@@ -340,40 +370,3 @@ def compile_ir_blocked(tree):
     return body
 end
 
-function image:run(method,...)
-    if not self[method] then
-        local compile_ir
-        if "recompute" == method then
-            compile_ir = compile_ir_recompute
-        elseif "image_wide" == method then
-            compile_ir = compile_ir_image_wide
-        elseif "blocked" == method then
-            compile_ir = compile_ir_blocked
-        end
-        assert(compile_ir,"unknown method "..tostring(method))
-        self[method] = compile_ir(self.tree)
-        assert(terralib.isfunction(self[method]),"compile did not return terra function")
-        self[method]:compile()
-        -- helpful for debug
-         self[method]:printpretty(true,false)
-        -- self[method]:disas()
-    end
-    local implementation = self[method]
-
-    local width,height
-    local imagedata = {}
-    for i,im in ipairs({...}) do
-        assert(concreteimage.isinstance(im),"expected a concrete image")
-        width,height = width or im.width,height or im.height
-        assert(width == im.width and height == im.height, "sizes of inputs do not match")
-        imagedata[i] = im.data
-    end
-    assert(width and height, "there must be at least one input image")
-    local inputs = terralib.new((&float)[#imagedata], imagedata)
-    local result = concreteimage.new { width = width, height = height }
-    result.data = alloc_image_data(width,height)
-    implementation(width,height,result.data,inputs)
-    return result
-end
-
-return { image = image, concreteimage = concreteimage, toimage = toimage }
