@@ -28,8 +28,8 @@ Scale uses the Python Abstract Syntax Tree (AST) as an intermediate representati
     @scale
     def mse(a: int, b: int) -> int:
         return {gen_square(a)} - {gen_square(b)}
-Scale is meta-programmed with Python through select multi-stage programming operators. Escapes allow the use of Python code within Scale functions. Escapes in Scale are represented by curly brackets ({}), whose contents are evaluated in Python at compile time and has its return value injected into the AST.
-Quotes allow for Scale expressions outside of Scale functions. In Scale, quotes are denoted with q[]. In the above example, the Scale function calls the Python function within the escape, and the quotes within the Python function allow it to manipulate x, which is a variable in Scale.
+Scale is meta-programmed with Python through select multi-stage programming operators. Escapes allow the use of Python code within Scale functions. Escapes in Scale are represented by curly brackets `{}`, whose contents are evaluated in Python at compile time and has its return value injected into the AST.
+Quotes allow for Scale expressions outside of Scale functions. In Scale, quotes are denoted with `q[]`. In the above example, the Scale function calls the Python function within the escape, and the quotes within the Python function allow it to manipulate `x`, which is a variable in Scale.
 
 Results and Evaluation
 ================
