@@ -1,5 +1,5 @@
 from macropy.core.macros import Macros
-from macropy.core.hquotes import hq, ast, ast_repr, ast_literal, Captured, Literal
+from macropy.core.hquotes import hq, ast, name, ast_repr, ast_literal, Captured, Literal
 
 macros = Macros()
 

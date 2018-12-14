@@ -6,13 +6,6 @@ import operator
 import re
 from PIL import Image
 
-def loadpbm(filename):
-    im = Image.open(filename)
-    return im
-
-def savepbm(im, filename):
-    im.save(filename)
-
 # represents a node in the IR
 class IRNode:
     def __init__(self, kind, **kwargs):
@@ -23,58 +16,65 @@ class IRNode:
 # represents actual image data
 class ConcreteImage:
     def __init__(self, filename):
-        F = open(filename, "rb")
-        cur = None
-
-        def _next():
-            nonlocal cur, F
-            cur = F.read(1)
-        _next()
-        def _isspace():
-            return cur and cur in ('\t', '\r', '\n', ' ', '#')
-        def _isdigit():
-            return '0' <= cur <= '9'
-        def _parseWhitespace():
-            assert _isspace(), "expected at least one whitespace character"
-            while _isspace():
-                if cur == "#":
-                    _next()
-                    while cur != "\n":
+        with open(filename, "rb") as F:
+            cur = None
+         
+            def _next():
+                nonlocal cur, F
+                cur = F.read(1)
+            _next()
+            def _isspace():
+                return cur and cur in ('\t', '\r', '\n', ' ', '#')
+            def _isdigit():
+                return '0' <= cur <= '9'
+            def _parseWhitespace():
+                assert _isspace(), "expected at least one whitespace character"
+                while _isspace():
+                    if cur == "#":
                         _next()
-                _next()
-        def parseInteger():
-            assert _isdigit(), "expected a number"
-            n = ""
-            while isdigit():
-                n += cur
-                _next()
-            return int(n)
-        assert(cur == "P", "wrong magic number")
-        _next()
-        assert(cur == "6", "wrong magic number")
-        _next()
-
-        parseWhitespace()
-        self.width = parseInteger()
-        parseWhitespace()
-        self.height = parseInteger()
-        parseWhitespace()
-        precision = parseInteger()
-        assert(precision == 255, "only supports 255 as max value")
-        assert(isspace(), "expected whitespace after precision")
-        data_as_string = F.read(width*height*3)
-        # read the data as flat data
-        self.data = [0] * (width * height)
-        for i in range(width * height):
-            r, g, b = data_as_string[3 * i + 1 : 3 * i + 3]
-            data[i] = min(255, (r + g + b) / 3)
-            x, y = i % 16, floor(i / 16)
-        _next()
-        assert cur == None, "expected EOF"
-
+                        while cur != "\n":
+                            _next()
+                    _next()
+            def parseInteger():
+                assert _isdigit(), "expected a number"
+                n = ""
+                while isdigit():
+                    n += cur
+                    _next()
+                return int(n)
+            assert(cur == "P", "wrong magic number")
+            _next()
+            assert(cur == "6", "wrong magic number")
+            _next()
+     
+            parseWhitespace()
+            self.width = parseInteger()
+            parseWhitespace()
+            self.height = parseInteger()
+            parseWhitespace()
+            precision = parseInteger()
+            assert(precision == 255, "only supports 255 as max value")
+            assert(isspace(), "expected whitespace after precision")
+            data_as_string = F.read(width*height*3)
+            # read the data as flat data
+            self.data = [0] * (width * height)
+            for i in range(width * height):
+                r, g, b = data_as_string[3 * i + 1 : 3 * i + 3]
+                self.data[i] = min(255, (r + g + b) / 3)
+                x, y = i % 16, floor(i / 16)
+            _next()
+            assert cur == None, "expected EOF"
+    
     def save(self, filename):
-        pass
-        savepbm(self, filename)
+        with open(filename, "wb") as F:
+            F.write('P6\n{} {}\n{}\n'.format(self.width, self.height, 255))
+            for i in range(self.width * self.height):
+                v = self.data[i]
+                v = floor(v)
+                v = max(0, min(v, 255))
+                F.write(byte(v))
+                F.write(byte(v))
+                F.write(byte(v))
 
 # represents an abstract computation that creates an image
 class Image:
@@ -153,74 +153,8 @@ def compile_ir_recompute(tree):
     return body
 end
 
-local function createloopir(method,tree)
-    local num_uses = {}
-    local function countuse(tree)
-        if num_uses[tree] then
-            num_uses[tree] = num_uses[tree] + 1
-        else
-            num_uses[tree] = 1
-            if tree.kind == "shift" then
-                countuse(tree.value)
-                countuse(tree.value) -- force all shifts to be treated as things that are reified
-            elseif tree.kind == "operator" then
-                countuse(tree.lhs)
-                countuse(tree.rhs)
-            end
-        end
-    end
-    countuse(tree)
-
-    local loopir = {}
-    local treemap = {}
-    local function convert(tree)
-        if tree.kind == "const" then
-            return tree
-        elseif method == "image_wide" and tree.kind == "input" then
-            return tree
-        end
-        if treemap[tree] then return treemap[tree] end
-        local ntree
-        if tree.kind == "operator" then
-            local lhs,rhs = convert(tree.lhs),convert(tree.rhs)
-            ntree = { kind = "operator", op = tree.op, lhs = lhs, rhs = rhs }
-        elseif tree.kind == "shift" then
-            local value = convert(tree.value)
-            ntree = { kind = "shift", sx = tree.sx, sy = tree.sy, value = value }
-        elseif tree.kind == "input" then
-            ntree = tree
-        else error("unknown kind") end
-
-        if num_uses[tree] > 1 then
-            local store = { kind = "storetemp", value = ntree, maxstencil = 0 }
-            table.insert(loopir,store)
-            ntree = { kind = "loadtemp", temp = store }
-        end
-        treemap[tree] = ntree
-        return ntree
-    end
-    local result = convert(tree)
-    table.insert(loopir, { kind = "storeresult", value = result, maxstencil = 0 })
-
-
-    local function updatemaxstencil(tree,expand)
-        if tree.kind == "loadtemp" then
-            print(tree.temp.maxstencil,expand)
-            tree.temp.maxstencil = math.max(tree.temp.maxstencil,expand)
-        elseif tree.kind == "operator" then
-            updatemaxstencil(tree.lhs,expand)
-            updatemaxstencil(tree.rhs,expand)
-        elseif tree.kind == "shift" then
-            local s = math.max(math.abs(tree.sx),math.abs(tree.sy))
-            updatemaxstencil(tree.value,expand + s)
-        end
-    end
-    for i = #loopir,1,-1 do
-        local loop = loopir[i]
-        updatemaxstencil(loop.value,loop.maxstencil)
-    end
-    return loopir
-end
+def createloopir(method, tree):
+    pass
 
 local function compile_ir_image_wide(tree)
     local loopir = createloopir("image_wide",tree)
