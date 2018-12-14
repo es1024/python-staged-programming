@@ -1,5 +1,5 @@
 from scale import scale
-from scale.quote import macros, q
+from scale.quote import macros, q, name
 import numpy as np
 import ast
 import operator
@@ -18,7 +18,7 @@ class ConcreteImage:
     def __init__(self, filename):
         with open(filename, "rb") as F:
             cur = None
-         
+
             def _next():
                 nonlocal cur, F
                 cur = F.read(1)
@@ -46,7 +46,7 @@ class ConcreteImage:
             _next()
             assert(cur == "6", "wrong magic number")
             _next()
-     
+
             parseWhitespace()
             self.width = parseInteger()
             parseWhitespace()
@@ -64,7 +64,7 @@ class ConcreteImage:
                 x, y = i % 16, floor(i / 16)
             _next()
             assert cur == None, "expected EOF"
-    
+
     def save(self, filename):
         with open(filename, "wb") as F:
             F.write('P6\n{} {}\n{}\n'.format(self.width, self.height, 255))
@@ -127,7 +127,7 @@ def min(x: int, y: int) -> int:
         return y
 
 def compile_ir_recompute(tree):
-    W,H,inputs = symbol(int,"W"),symbol(int,"H"),symbol(&&float,"inputs")
+    W,H,inputs = name[W],name[H],name[inputs]
 
     def gen_tree(tree,x,y):
         if tree.kind == "const":
@@ -143,10 +143,11 @@ def compile_ir_recompute(tree):
             return gen_tree(tree.value,xn,yn)
 
     @scale
-    def body(W: int, H: int, output : [float], inputs [[float]] )
+    def body(W: int, H: int, output : [float], inputs [[float]] ) -> int:
         for y in range(H):
           for x in range(W):
             output[(y*W + x)] = { gen_tree(tree,x,y) }
+        return 0
 
     return body
 
@@ -154,32 +155,34 @@ def compile_ir_recompute(tree):
 def createloopir(method, tree):
     pass
 
-local function compile_ir_image_wide(tree)
-    local loopir = createloopir("image_wide",tree)
+def compile_ir_image_wide(tree):
+    loopir = createloopir("image_wide",tree)
 
-    local W,H,inputs = symbol(int,"W"),symbol(int,"H"),symbol(&&float,"inputs")
-    local output = symbol(&float,"output")
+    W,H,inputs = name[W],name[H],name[inputs]
+    output = name[output]
 
     local statements = {}
     local cleanup = {}
     local temptoptr = {}
-    local function gen_tree(tree,x,y)
-        if tree.kind == "const" then
-            return `float(tree.value)
-        elseif tree.kind == "input" then
-            return `load_data(W,H,inputs[tree.index],x,y)
-        elseif tree.kind == "operator" then
+    def gen_tree(tree,x,y):
+        if tree.kind == "const":
+            return q[float(tree.value)]
+        elif tree.kind == "input":
+            return q[load_data(W,H,inputs[tree.index],x,y)]
+        elif tree.kind == "operator":
             local lhs = gen_tree(tree.lhs,x,y)
             local rhs = gen_tree(tree.rhs,x,y)
             return tree.op(lhs,rhs)
-        elseif tree.kind == "shift" then
-            local xn,yn = `x + tree.sx,`y + tree.sy
+        elif tree.kind == "shift":
+            local xn,yn = q[x + tree.sx],q[y + tree.sy]
             return gen_tree(tree.value,xn,yn)
-        elseif tree.kind == "loadtemp" then
-            local ptr = assert(temptoptr[tree.temp],"no temporary?")
-            return `load_data(W,H,ptr,x,y)
-        else error("unknown kind") end
-    end
+        elif tree.kind == "loadtemp":
+            assert(temptoptr[tree.temp],"no temporary?")
+            local ptr = temptoptr[tree.temp]
+            return q[load_data(W,H,ptr,x,y)]
+        else:
+            raise Exception("unknown kind")
+
     for i,loop in ipairs(loopir) do
         local data = symbol(&float,"data")
         local ptr
@@ -194,22 +197,18 @@ local function compile_ir_image_wide(tree)
         end
         local loopcode = quote
             var [data] = ptr
-            for y = 0,H do
-                for x = 0,W do
+            for y in range(H):
+                for x in range(W):
                     data[y*W+x] = [gen_tree(loop.value,x,y)]
-                end
-            end
-        end
         table.insert(statements,loopcode)
-    end
-    local terra body([W], [H], [output], [inputs] )
+    @scale
+    def body(W: int, H: int, [output], [inputs] ) -> int:
         [statements]
         [cleanup]
-    end
+        return 0
     return body
-end
 
-local function compile_ir_blocked(tree)
+def compile_ir_blocked(tree):
     local BLOCK_SIZE = 128
     local loopir = createloopir("blocked",tree)
 
