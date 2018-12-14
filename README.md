@@ -17,7 +17,9 @@ Scale is a low-level statically-typed language embedded in Python 3, designed to
                            img[i + 1,j + 2] + \
                            img[i + 1,j + 0] - 4 * img[i + 1,j + 1]
         return 0
-To differentiate from Python functions, we use the @scale decorator to denote Scale functions. Unlike Python, arguments and return types must be explicitly specified, which allows typesafe runtime code generation through LLVM. Scale supports integers, floats, booleans as basic types, and multidimensional arrays as the primary data structure. Scale's control flow consists of if statements, for loops, and gotos, behaving identically to that of Python.
+To differentiate from Python functions, we use the @scale decorator to denote Scale functions. Unlike Python, arguments and return types must be explicitly specified, which allows typesafe runtime code generation through LLVM. Scale supports integers, floats, booleans as basic types, and multidimensional arrays as the primary data structure. Scale's control flow consists of if statements, for loops, and gotos, behaving identically to that of Python. Function calls
+
+Scale uses the Python Abstract Syntax Tree (AST) as an intermediate representation
         
 
     def gen_square(x):
@@ -26,6 +28,8 @@ To differentiate from Python functions, we use the @scale decorator to denote Sc
     @scale
     def mse(a: int, b: int) -> int:
         return {gen_square(a)} - {gen_square(b)}
+Scale is meta-programmed with Python through select multi-stage programming operators. Escapes allow the use of Python code within Scale functions. Escapes in Scale are represented by curly brackets ({}), whose contents are evaluated in Python at compile time and has its return value injected into the AST.
+Quotes allow for Scale expressions outside of Scale functions. In Scale, quotes are denoted with q[]. In the above example, the Scale function calls the Python function within the escape, and the quotes within the Python function allow it to manipulate x, which is a variable in Scale.
 
 Results and Evaluation
 ================
