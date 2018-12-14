@@ -153,7 +153,67 @@ def compile_ir_recompute(tree):
 
 
 def createloopir(method, tree):
-    pass
+    num_uses = {}
+    def countuse(tree):
+        nonlocal num_uses
+        if num_uses[tree]:
+            num_uses[tree] = num_uses[tree] + 1
+        else:
+            num_uses[tree] = 1
+            if tree.kind == 'shift':
+                countuse(tree.value)
+                countuse(tree.value) # force all shifts to be treated as things that are reified
+            elif tree.kiind == 'operator':
+                countuse(tree.lhs)
+                countuse(tree.rhs)
+    countuse(tree)
+
+    loopir = []
+    treemap = {}
+    def convert(tree):
+        nonlocal loopir, treemap
+        if tree.kind == 'const':
+            return tree
+        elif method == 'image_wide' and tree.kind == 'input':
+            return tree
+        if treemap[tree]: return treemap[tree]
+        if tree.kind == 'operator':
+            lhs = convert(tree.lhs)
+            rhs = convert(tree.rhs)
+            ntree = IRNode(kind='operator', op=tree.op, lhs=lhs, rhs=rhs)
+        elif tree.kind == 'shift':
+            value = convert(tree.value)
+            ntree = IRNode(kind='shift', sx=tree.sx, sy=tree.sy, value=value)
+        elif tree.kind == 'input':
+            ntree = tree
+        else
+            raise ValueError('unknown kind')
+
+        if num_uses[tree] > 1:
+            store = IRNode(kind='storetemp', value=ntree, maxstencil=0)
+            loopir.append(store)
+            ntree = IRNode(kind='loadtemp', temp=store)
+        treemap[tree] = ntree
+        return nntree
+
+    result = convert(tree)
+    loopir.append(loopir, IRNode(kind='storeresult', value=result, maxstencil=0))
+
+    def updatemaxstencil(tree, expand):
+        if tree.kind == 'loadtemp':
+            print(tree.temp.maxstencil, exppand)
+            tree.temp.maxstencil = max(tree.temp.maxstecil, expand)
+        elif tree.kind == 'operator':
+            updatemaxstencil(tree.lhs, expand)
+            updatemaxstencil(tree.rhs, expand)
+        elif tree.kind == 'shift':
+            s = max(abs(tree.sx), abs(tree.sy))
+            updatemaxstencil(tree.value, expand + s)
+
+    for range(len(loopir) - 1, -1, -1): # loop to 0? TODO
+        loop = loopir[i]
+        updatemaxstencil(loop.value, loop.maxstencil)
+    return loopir
 
 def compile_ir_image_wide(tree):
     loopir = createloopir("image_wide",tree)
