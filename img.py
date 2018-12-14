@@ -4,85 +4,18 @@ import numpy as np
 import ast
 import operator
 import re
+from PIL import Image
 
 def alloc_image_data(w,h): # TODO:
     data = C.malloc(4*w*h)
     return terralib.cast(&float,data)
 
 def loadpbm(filename):
-    F = open(filename, "r")
-    cur = F.read(1)
-    def isspace(cur):
-        return cur and (re.search(r'[\s]', cur) or cur == "#")
+    im = Image.open(filename)
+    return im
 
-    def parseWhitespace(cur, F):
-        assert(isspace(cur) is True, "expected at least one whitespace character")
-        while isspace(cur):
-            if cur == "#":
-                while cur != "\n":
-                    cur = F.read(1)
-            cur = F.read(1)
-        return cur
-
-    def parseInteger(cur, F):
-        assert(cur.isdigit(), "expected a number")
-        n = ""
-        while cur.isdigit():
-            n += cur
-            cur = F.read(1)
-        assert(int(n), "not a number?")
-        return int(n)
-    assert(cur == "P", "wrong magic number")
-    cur = F.read(1)
-    assert(cur == "6", "wrong magic number")
-    cur = F.read(1)
-
-    # TODO: Update once image object a thing
-    local image = {}
-    cur = parseWhitespace(cur, F)
-    image.width = parseInteger(cur, F)
-    cur = parseWhitespace(cur, F)
-    image.height = parseInteger(cur, F)
-    cur = parseWhitespace(cur, F)
-    local precision = parseInteger(cur, F)
-    assert(precision == 255, "only supports 255 as max value")
-    assert(isspace(cur), "expected whitespace after precision")
-    local data_as_string = F:read(image.width*image.height*3)
-    -- read the data as flat data
-    local data = alloc_image_data(image.width,image.height)
-    for i  in range(image.width*image.height - 1):
-        local r,g,b = data_as_string:byte(3*i+1,3*i+3)
-        data[i] = math.min(255,(r+g+b)/3.0)
-        local x,y = i % 16, math.floor(i / 16)
-    image.data = data
-    cur = F.read(1)
-    assert(cur == nil, "expected EOF")
-    return image
-
-
-local headerpattern = [[
-P6
-%d %d
-%d
-]]
-
-def savepbm(image,filename):
-    local F = assert(io.open(filename,"wb"), "file could not be opened for writing")
-    F:write(string.format(headerpattern, image.width, image.height, 255))
-    local function writeNumber(v)
-        assert(type(v) == "number","NaN?")
-        F:write(string.char(v))
-    end
-    local floor,max,min,char,data,fwrite = math.floor,math.max,math.min,string.char,image.data,F.write
-    for i = 0, image.width*image.height - 1 do
-        local v = data[i]
-        v = floor(v)
-        v = max(0,min(v,255))
-        v = char(v)
-        fwrite(F,v..v..v)
-    end
-    F:close()
-end
+def savepbm(im, filename):
+    im.save(filename)
 
 local function newclass(name)
     local cls = {}
