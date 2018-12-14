@@ -18,9 +18,12 @@ Scale is a low-level statically-typed language embedded in Python 3, designed to
                            img[i + 1,j + 0] - 4 * img[i + 1,j + 1]
         return 0
         
-To differentiate from Python functions, we use the `@scale` decorator to denote Scale functions. Unlike Python, arguments and return types must be explicitly specified, which allows typesafe runtime code generation through LLVM. Scale supports integers, floats, booleans as basic types, and multidimensional arrays as the primary data structure. Scale's control flow consists of if statements, for loops, and gotos, behaving identically to that of Python. Scale supports function calls to 
+    @scale.native
+    def putchar(n: int) -> int: pass
+        
+To differentiate from Python functions, we use the `@scale` decorator to denote Scale functions. Unlike Python, arguments and return types must be explicitly specified, which allows typesafe runtime code generation through LLVM. Scale supports integers, floats, booleans as basic types, and multidimensional arrays as the primary data structure. Scale's control flow consists of if statements, for loops, and gotos, behaving identically to that of Python. Scale supports both function calls to other Scale methods, and also supports C functions by decorating the function with`@scale.native`.
 
-Scale uses the Python Abstract Syntax Tree (AST) as an intermediate representation
+Scale uses the Python Abstract Syntax Tree (AST) as an intermediate representation.
         
 
     def gen_square(x):
@@ -31,7 +34,10 @@ Scale uses the Python Abstract Syntax Tree (AST) as an intermediate representati
         return {gen_square(a)} - {gen_square(b)}
         
 Scale is meta-programmed with Python through select multi-stage programming operators. Escapes allow the use of Python code within Scale functions. Escapes in Scale are represented by curly brackets `{}`, whose contents are evaluated in Python at compile time and has its return value injected into the AST.
-Quotes allow for Scale expressions outside of Scale functions. In Scale, quotes are denoted with `q[]`. In the above example, the Scale function calls the Python function within the escape, and the quotes within the Python function allow it to manipulate `x`, which is a variable in Scale.
+Quasiquotes allow for Scale expressions outside of Scale functions, and are denoted with `q[]`. They return the AST of the expression within it, generating it using the captured value of Scale variables if present. In the above example, the Scale function calls the Python function within the escape, and the quasiquotes within the Python function allow it to manipulate `x`, which is a variable in Scale.
+
+Scale also supports block quotes using the syntax `with q as stmt:`. Although escapes are not supported within these blocks, the same effect can be achieved through unquotes, `u[]`, which takes the value within the brackets and injects it into the AST assigned to `stmt`.
+
 
 Results and Evaluation
 ================
