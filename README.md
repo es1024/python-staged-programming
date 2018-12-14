@@ -1,4 +1,17 @@
-# Staged Programming in Python
+Scale: Staged Programming in Python
+==========================
+_Alex Fang and Eric Sheng_
 
-CS294-141 final project
-test
+Scale is a low-level statically-typed language embedded in Python 3, designed to help users 
+
+Introduction
+================
+
+Scale Language
+================
+
+Results and Evaluation
+================
+
+Conclusion
+================
