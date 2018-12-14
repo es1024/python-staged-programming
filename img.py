@@ -9,57 +9,7 @@ def alloc_image_data(w,h): # TODO:
     data = C.malloc(4*w*h)
     return terralib.cast(&float,data)
 
-def loadpbm(filename):
-    F = open(filename, "r")
-    cur = F.read(1)
-    def isspace(cur):
-        return cur and (re.search(r'[\s]', cur) or cur == "#")
-
-    def parseWhitespace(cur, F):
-        assert(isspace(cur) is True, "expected at least one whitespace character")
-        while isspace(cur):
-            if cur == "#":
-                while cur != "\n":
-                    cur = F.read(1)
-            cur = F.read(1)
-        return cur
-
-    def parseInteger(cur, F):
-        assert(cur.isdigit(), "expected a number")
-        n = ""
-        while cur.isdigit():
-            n += cur
-            cur = F.read(1)
-        assert(int(n), "not a number?")
-        return int(n)
-    assert(cur == "P", "wrong magic number")
-    cur = F.read(1)
-    assert(cur == "6", "wrong magic number")
-    cur = F.read(1)
-
-    # TODO: Update once image object a thing
-    local image = {}
-    cur = parseWhitespace(cur, F)
-    image.width = parseInteger(cur, F)
-    cur = parseWhitespace(cur, F)
-    image.height = parseInteger(cur, F)
-    cur = parseWhitespace(cur, F)
-    local precision = parseInteger(cur, F)
-    assert(precision == 255, "only supports 255 as max value")
-    assert(isspace(cur), "expected whitespace after precision")
-    local data_as_string = F:read(image.width*image.height*3)
-    -- read the data as flat data
-    local data = alloc_image_data(image.width,image.height)
-    for i  in range(image.width*image.height - 1):
-        local r,g,b = data_as_string:byte(3*i+1,3*i+3)
-        data[i] = math.min(255,(r+g+b)/3.0)
-        local x,y = i % 16, math.floor(i / 16)
-    image.data = data
-    cur = F.read(1)
-    assert(cur == nil, "expected EOF")
-    return image
-
-
+def savepbm(i
 local headerpattern = [[
 P6
 %d %d
@@ -84,98 +34,118 @@ def savepbm(image,filename):
     F:close()
 end
 
-local function newclass(name)
-    local cls = {}
-    cls.__index = cls
-    function cls.new(tbl)
-        return setmetatable(tbl,cls)
-    end
-    function cls.isinstance(x)
-        return getmetatable(x) == cls
-    end
-    function cls:__tostring()
-        return "<"..name..">"
-    end
-    return cls
-end
+# represents a node in the IR
+class IRNode:
+    def __init__(self, kind, **kwargs):
+        self.kind = kind
+        for k, v in kwargs:
+            setattr(self, k, v)
 
--- represents actual image data
-local concreteimage = newclass("concreteimage")
-function concreteimage.load(filename)
-    return concreteimage.new(loadpbm(filename))
-end
-function concreteimage:save(filename)
-    savepbm(self,filename)
-end
+# represents actual image data
+class ConcreteImage:
+    def __init__(self, filename):
+        F = open(filename, "rb")
+        cur = None
+     
+        def _next():
+            nonlocal cur, F
+            cur = F.read(1)
+        _next()
+        def _isspace():
+            return cur and cur in ('\t', '\r', '\n', ' ', '#')
+        def _isdigit():
+            return '0' <= cur <= '9'
+        def _parseWhitespace():
+            assert _isspace(), "expected at least one whitespace character"
+            while _isspace():
+                if cur == "#":
+                    _next()
+                    while cur != "\n":
+                        _next()
+                _next()
+        def parseInteger():
+            assert _isdigit(), "expected a number"
+            n = ""
+            while isdigit():
+                n += cur
+                _next()
+            return int(n)
+        assert(cur == "P", "wrong magic number")
+        _next()
+        assert(cur == "6", "wrong magic number")
+        _next()
+    
+        parseWhitespace()
+        self.width = parseInteger()
+        parseWhitespace()
+        self.height = parseInteger()
+        parseWhitespace()
+        precision = parseInteger()
+        assert(precision == 255, "only supports 255 as max value")
+        assert(isspace(), "expected whitespace after precision")
+        data_as_string = F.read(width*height*3)
+        # read the data as flat data
+        self.data = [0] * (width * height)
+        for i in range(width * height):
+            r, g, b = data_as_string[3 * i + 1 : 3 * i + 3]
+            data[i] = min(255, (r + g + b) / 3)
+            x, y = i % 16, floor(i / 16)
+        _next()
+        assert cur == None, "expected EOF"
 
+    def save(self, filename):
+        pass
+        savepbm(self, filename)
 
--- represents an abstract computation that creates an image
-local image  = newclass("image")
-function image.constant(const)
-    local result = image.new {}
-    result.tree = error("NYI - your IR goes here")
-    return result
-end
-function image.input(index)
-    local result = image.new {}
-    result.tree = error("NYI - your IR goes here")
-    return result
-end
+# represents an abstract computation that creates an image
+class Image:
+    def __init__(self, tree=None):
+        self.tree = tree
 
--- Support constant numbers as images
-local function toimage(x)
-  if image.isinstance(x) then
-    return x
-  elseif type(x) == "number" then
-    return image.constant(x)
-  end
-  return nil
-end
+    def constant(const):
+        return Image(IRNode(kind='const', value=const))
 
-local function pointwise(self,rhs,op)
-    self,rhs = assert(toimage(self),"not an image"),assert(toimage(rhs),"not an image")
-    local result = image.new {}
-    result.tree = error("NYI - your IR goes here")
-    return result
-end
+    def input(index):
+        return Image(IRNode(kind='input', index=index))
 
-function image:__add(rhs)
-    return pointwise(self,rhs,function(x,y) return `x + y end)
-end
-function image:__sub(rhs)
-    return pointwise(self,rhs,function(x,y) return `x - y end)
-end
-function image:__mul(rhs)
-    return pointwise(self,rhs,function(x,y) return `x * y end)
-end
-function image:__div(rhs)
-    return pointwise(self,rhs,function(x,y) return `x / y end)
-end
--- generate an image that translates the pixels in the new image
-function image:shift(sx,sy)
-    local result = image.new {}
-    result.tree = error("NYI - your IR goes here")
-    return result
-end
+    def __toimage(x):
+        if isinstance(x, Image):
+            return x
+        elif isinstance(x, int) or isinstance(x, float):
+            return Image.constant(x)
+        return None
 
-local terra load_data(W : int, H : int, data : &float, x : int, y : int) : float
-    while x < 0 do
-        x = x + W
-    end
-    while x >= W do
-        x = x - W
-    end
-    while y < 0 do
-        y = y + H
-    end
-    while y >= H do
-        y = y - H
-    end
-    return data[(y*W + x)]
-end
-local terra min(x : int, y : int)
-    return terralib.select(x < y,x,y)
-end
+    def __pointwise(self, rhs, op):
+        rhs = __toimage(rhs)
+        return Image(IRNode(kind='operator', op=op, lhs=self.tree, rhs=rhs.tree))
+    
+    def __add__(self, rhs):
+        return self.__pointwise(rhs, lambda x, y: q[x + y])
+    
+    def __sub__(self, rhs):
+        return self.__pointwise(rhs, lambda x, y: q[x - y])
+    
+    def __mul__(self, rhs):
+        return self.__pointwise(rhs, lambda x, y: q[x * y])
+    
+    def __div__(self, rhs):
+        return self.__pointwise(rhs, lambda x, y: q[x / y])
+
+    def shift(self, sx, sy):
+        return Image(IRNode(kind='shift', sx=sx, sy=sy, value=self.tree))
+
+@scale
+def load_data(W: int, H: int, data: [float], x: int, y: int) -> float:
+    x = ((x % W) + W) % W
+    y = ((y % H) + H) % H
+    return data[y * W + x]
+
+@scale
+def min(x: int, y: int) -> int:
+    if x < y:
+        return x
+    else:
+        return y
 
 local function compile_ir_recompute(tree)
     -- YOUR CODE HERE
