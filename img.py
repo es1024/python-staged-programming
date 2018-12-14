@@ -129,29 +129,27 @@ def min(x: int, y: int) -> int:
 def compile_ir_recompute(tree):
     W,H,inputs = symbol(int,"W"),symbol(int,"H"),symbol(&&float,"inputs")
 
-    local function gen_tree(tree,x,y)
-        if tree.kind == "const" then
-            return `float(tree.value)
-        elseif tree.kind == "input" then
-            return `load_data(W,H,inputs[tree.index],x,y)
-        elseif tree.kind == "operator" then
-            local lhs = gen_tree(tree.lhs,x,y)
-            local rhs = gen_tree(tree.rhs,x,y)
+    def gen_tree(tree,x,y):
+        if tree.kind == "const":
+            return q[float(tree.value)]
+        elif tree.kind == "input":
+            return q[load_data(W,H,inputs[tree.index],x,y)]
+        elif tree.kind == "operator":
+            lhs = gen_tree(tree.lhs,x,y)
+            rhs = gen_tree(tree.rhs,x,y)
             return tree.op(lhs,rhs)
-        elseif tree.kind == "shift" then
-            local xn,yn = `x + tree.sx,`y + tree.sy
+        elif tree.kind == "shift":
+            local xn,yn = q[x + tree.sx],q[y + tree.sy]
             return gen_tree(tree.value,xn,yn)
-        end
-    end
-    local terra body([W], [H], output : &float, [inputs] )
-        for y = 0,H do
-          for x = 0,W do
-            output[(y*W + x)] = [ gen_tree(tree,x,y) ]
-          end
-        end
-    end
+
+    @scale
+    def body(W: int, H: int, output : [float], inputs [[float]] )
+        for y in range(H):
+          for x in range(W):
+            output[(y*W + x)] = { gen_tree(tree,x,y) }
+
     return body
-end
+
 
 local function createloopir(method,tree)
     local num_uses = {}
