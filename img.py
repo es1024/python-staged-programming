@@ -6,10 +6,6 @@ import operator
 import re
 from PIL import Image
 
-def alloc_image_data(w,h): # TODO:
-    data = C.malloc(4*w*h)
-    return terralib.cast(&float,data)
-
 def loadpbm(filename):
     im = Image.open(filename)
     return im
@@ -130,24 +126,227 @@ def min(x: int, y: int) -> int:
     else:
         return y
 
-local function compile_ir_recompute(tree)
-    -- YOUR CODE HERE
-    local terra body(W : int, H : int, output : &float, inputs : &&float)
+def compile_ir_recompute(tree):
+    W,H,inputs = symbol(int,"W"),symbol(int,"H"),symbol(&&float,"inputs")
+
+    local function gen_tree(tree,x,y)
+        if tree.kind == "const" then
+            return `float(tree.value)
+        elseif tree.kind == "input" then
+            return `load_data(W,H,inputs[tree.index],x,y)
+        elseif tree.kind == "operator" then
+            local lhs = gen_tree(tree.lhs,x,y)
+            local rhs = gen_tree(tree.rhs,x,y)
+            return tree.op(lhs,rhs)
+        elseif tree.kind == "shift" then
+            local xn,yn = `x + tree.sx,`y + tree.sy
+            return gen_tree(tree.value,xn,yn)
+        end
+    end
+    local terra body([W], [H], output : &float, [inputs] )
         for y = 0,H do
           for x = 0,W do
-            output[(y*W + x)] = [ --[[YOUR CODE HERE]] 0 ]
+            output[(y*W + x)] = [ gen_tree(tree,x,y) ]
           end
         end
     end
     return body
 end
 
+local function createloopir(method,tree)
+    local num_uses = {}
+    local function countuse(tree)
+        if num_uses[tree] then
+            num_uses[tree] = num_uses[tree] + 1
+        else
+            num_uses[tree] = 1
+            if tree.kind == "shift" then
+                countuse(tree.value)
+                countuse(tree.value) -- force all shifts to be treated as things that are reified
+            elseif tree.kind == "operator" then
+                countuse(tree.lhs)
+                countuse(tree.rhs)
+            end
+        end
+    end
+    countuse(tree)
+
+    local loopir = {}
+    local treemap = {}
+    local function convert(tree)
+        if tree.kind == "const" then
+            return tree
+        elseif method == "image_wide" and tree.kind == "input" then
+            return tree
+        end
+        if treemap[tree] then return treemap[tree] end
+        local ntree
+        if tree.kind == "operator" then
+            local lhs,rhs = convert(tree.lhs),convert(tree.rhs)
+            ntree = { kind = "operator", op = tree.op, lhs = lhs, rhs = rhs }
+        elseif tree.kind == "shift" then
+            local value = convert(tree.value)
+            ntree = { kind = "shift", sx = tree.sx, sy = tree.sy, value = value }
+        elseif tree.kind == "input" then
+            ntree = tree
+        else error("unknown kind") end
+
+        if num_uses[tree] > 1 then
+            local store = { kind = "storetemp", value = ntree, maxstencil = 0 }
+            table.insert(loopir,store)
+            ntree = { kind = "loadtemp", temp = store }
+        end
+        treemap[tree] = ntree
+        return ntree
+    end
+    local result = convert(tree)
+    table.insert(loopir, { kind = "storeresult", value = result, maxstencil = 0 })
+
+
+    local function updatemaxstencil(tree,expand)
+        if tree.kind == "loadtemp" then
+            print(tree.temp.maxstencil,expand)
+            tree.temp.maxstencil = math.max(tree.temp.maxstencil,expand)
+        elseif tree.kind == "operator" then
+            updatemaxstencil(tree.lhs,expand)
+            updatemaxstencil(tree.rhs,expand)
+        elseif tree.kind == "shift" then
+            local s = math.max(math.abs(tree.sx),math.abs(tree.sy))
+            updatemaxstencil(tree.value,expand + s)
+        end
+    end
+    for i = #loopir,1,-1 do
+        local loop = loopir[i]
+        updatemaxstencil(loop.value,loop.maxstencil)
+    end
+    return loopir
+end
+
 local function compile_ir_image_wide(tree)
-    -- YOUR CODE HERE
+    local loopir = createloopir("image_wide",tree)
+
+    local W,H,inputs = symbol(int,"W"),symbol(int,"H"),symbol(&&float,"inputs")
+    local output = symbol(&float,"output")
+
+    local statements = {}
+    local cleanup = {}
+    local temptoptr = {}
+    local function gen_tree(tree,x,y)
+        if tree.kind == "const" then
+            return `float(tree.value)
+        elseif tree.kind == "input" then
+            return `load_data(W,H,inputs[tree.index],x,y)
+        elseif tree.kind == "operator" then
+            local lhs = gen_tree(tree.lhs,x,y)
+            local rhs = gen_tree(tree.rhs,x,y)
+            return tree.op(lhs,rhs)
+        elseif tree.kind == "shift" then
+            local xn,yn = `x + tree.sx,`y + tree.sy
+            return gen_tree(tree.value,xn,yn)
+        elseif tree.kind == "loadtemp" then
+            local ptr = assert(temptoptr[tree.temp],"no temporary?")
+            return `load_data(W,H,ptr,x,y)
+        else error("unknown kind") end
+    end
+    for i,loop in ipairs(loopir) do
+        local data = symbol(&float,"data")
+        local ptr
+        if loop.kind == "storetemp" then
+            ptr = `[&float](C.malloc(W*H*sizeof(float)))
+            table.insert(cleanup,quote
+                C.free(data)
+            end)
+            temptoptr[loop] = data
+        elseif loop.kind == "storeresult" then
+            ptr = output
+        end
+        local loopcode = quote
+            var [data] = ptr
+            for y = 0,H do
+                for x = 0,W do
+                    data[y*W+x] = [gen_tree(loop.value,x,y)]
+                end
+            end
+        end
+        table.insert(statements,loopcode)
+    end
+    local terra body([W], [H], [output], [inputs] )
+        [statements]
+        [cleanup]
+    end
+    return body
 end
 
 local function compile_ir_blocked(tree)
-    -- YOUR CODE HERE
+    local BLOCK_SIZE = 128
+    local loopir = createloopir("blocked",tree)
+
+    local W,H,inputs = symbol(int,"W"),symbol(int,"H"),symbol(&&float,"inputs")
+    local output = symbol(&float,"output")
+    local beginy,beginx = symbol(int,"beginy"),symbol(int,"beginx")
+    local statements = {}
+    local temptoptr = {}
+    local function gen_tree(tree,x,y)
+        if tree.kind == "const" then
+            return `float(tree.value)
+        elseif tree.kind == "input" then
+            return `load_data(W,H,inputs[tree.index],beginx + x,beginy + y)
+        elseif tree.kind == "operator" then
+            local lhs = gen_tree(tree.lhs,x,y)
+            local rhs = gen_tree(tree.rhs,x,y)
+            return tree.op(lhs,rhs)
+        elseif tree.kind == "shift" then
+            local xn,yn = `x + tree.sx,`y + tree.sy
+            return gen_tree(tree.value,xn,yn)
+        elseif tree.kind == "loadtemp" then
+            local maxstencil = tree.temp.maxstencil
+            local ptr = assert(temptoptr[tree.temp],"no temporary?")
+            local stride = BLOCK_SIZE+2*maxstencil
+            local start = maxstencil + stride*maxstencil
+            return `ptr[start + stride*y + x]
+        else error("unknown kind") end
+    end
+    for i,loop in ipairs(loopir) do
+        local loopcode
+        if loop.kind == "storetemp" then
+            local stride = 2*loop.maxstencil + BLOCK_SIZE
+            local data = symbol(float[stride*stride],"data")
+            temptoptr[loop] = data
+            local loopbegin,loopend = -loop.maxstencil,BLOCK_SIZE + loop.maxstencil
+            local start = loop.maxstencil + stride*loop.maxstencil
+            assert(start + loopbegin * stride + loopbegin == 0)
+            assert(start + (loopend-1) * stride + loopend - 1 == stride*stride - 1)
+            loopcode = quote
+                var [data]
+                for y = loopbegin,loopend do
+                    for x = loopbegin,loopend do
+                        data[start+y*stride+x] = [gen_tree(loop.value,x,y)]
+                        --C.printf("temp %d,%d = %f\n",beginx + x, beginy + y,data[start+y*stride+x])
+                    end
+                end
+                --C.printf("--------------------\n")
+            end
+        elseif loop.kind == "storeresult" then
+            loopcode = quote
+                var start = output + beginy*W + beginx
+                for y = 0,min(H - beginy,BLOCK_SIZE) do
+                    for x = 0,min(W - beginx,BLOCK_SIZE) do
+                        start[y*W + x] = [gen_tree(loop.value,x,y)]
+                        --C.printf("%d,%d = %f\n",beginx + x, beginy + y,start[y*W+x])
+                    end
+                end
+            end
+        end
+        table.insert(statements,loopcode)
+    end
+    local terra body([W], [H], [output], [inputs] )
+        for [beginy] = 0,H,BLOCK_SIZE do
+            for [beginx] = 0,W,BLOCK_SIZE do
+                [statements]
+            end
+        end
+    end
+    return body
 end
 
 function image:run(method,...)
@@ -187,51 +386,3 @@ function image:run(method,...)
 end
 
 return { image = image, concreteimage = concreteimage, toimage = toimage }
-
-def alloc_image_data(w,h)
-    local data = C.malloc(4*w*h)
-    return terralib.cast(&float,data)
-
-@scale
-def load_data(W : int, H : int, data : [float], x : int, y : int) -> float:
-    x = ((x % W) + W) % W
-    y = ((y % H) + H) % H
-    return data[y, x]
-
-@scale
-def min(x : int, y : int)
-    if x < y:
-        return x
-    return y
-
-def compile_ir_recompute(tree):
-    def gen_tree(tree,x,y):
-        if isinstance(tree, ast.Num):
-            return q[float(tree.n)]
-        elif isinstance(tree, ast.List):
-            return q[load_data(W,H,inputs[tree.index],x,y)]
-        elif isinstance(tree, ast.BinOp):
-            tr_op = {
-                Bop.And: operator.and_,
-                Bop.Or: operator.or_,
-                Bop.Mod: operator.mod,
-                Bop.Div: operator.truediv,
-                Bop.Mul: operator.mul,
-                Bop.Add: operator.add,
-                Bop.Sub: operator.sub
-            }
-            lhs = gen_tree(tree.left,x,y)
-            rhs = gen_tree(tree.right,x,y)
-            return tr_op[node.op](lhs, rhs)
-        elif tree.kind == "shift":
-            xn, yn = q[x + tree.sx],q[y + tree.sy]
-            return gen_tree(tree.value,xn,yn)
-
-    @scale
-    def body(W: int, H: int, output: [float], inputs[[float]]) -> int:
-        for y in range(H):
-          for x in range(W):
-            output[(y*W + x)] = {gen_tree(tree,x,y)}
-        return 0
-
-    return body
