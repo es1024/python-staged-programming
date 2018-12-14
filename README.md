@@ -4,10 +4,17 @@ _Alex Fang and Eric Sheng_
 
 Introduction
 ================
+In order to improve performance, a common approach is to use multiple languages to target the specific tasks involved. This can typically be split into a higher level language to describe behavior and implement tasks not reliant on speed, and a lower level language to produce high performance code. This general idea allows user to choose the level of abstraction per task, which leads to the idea of multi-stage programming. In multi-stage programming, code compilation happens in multiple stages, which allows it to take advantage of information available from the function definition for optimization in performance. By using information gained, such as argument types and return types, the code is then compiled into code generated specifically for that version of the function defined.
+
+Multi-stage programming allows for the development of compiled implementations of DSLs without requiring the time and expertise normally required for writing a compiler. This is because 
+
+Previous work done in this area includes Terra, which is embedded and metaprogrammed in Lua.
+
+In order to to target the ideas of multi-stage programming and Python, we introduce Scale. Below, we will show that Scale can be used to 
 
 Scale Language
 ================
-Scale is a low-level statically-typed language embedded in Python 3, designed to help users with
+Scale is a low-level statically-typed language embedded in Python 3, designed to help users with staged programming and writing DSLs in Python.
 
     @scale
     def laplace(img: [[int]], out: [[int]], l: int) -> int:
