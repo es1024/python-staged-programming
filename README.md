@@ -3,7 +3,7 @@ Scale: Staged Programming in Python
 _Alex Fang and Eric Sheng_
 
 Introduction
-================
+---------------
 In order to improve performance, a common approach is to use multiple languages to target the specific tasks involved. This can typically be split into a higher level language to describe behavior and implement tasks not reliant on speed, and a lower level language to produce high performance code. This general idea allows user to choose the level of abstraction per task, which leads to the idea of multi-stage programming. In multi-stage programming, code compilation happens in multiple stages, which allows it to take advantage of information available from the function definition for optimization in performance. By using information gained, such as argument types and return types, the code is then compiled into code generated specifically for that version of the function defined.
 
 Multi-stage programming allows for the development of compiled implementations of DSLs without requiring the time and expertise normally required for writing a compiler. This is because the higher level language's operators can be overloaded for the operators and expressions wanted in the new DSL, which will then have an appropriate intermediate representation that can be generate code in a lower level language that can be compiled to generate efficient code. This is convenient as it allows users to use the higher level language to experiment and describe their program while having the performance close to the lower level language. Previous work done in this area includes Terra, which is embedded and metaprogrammed in Lua. With Terra, DSLs can be written in Lua and then compiled into high performance Terra code.
@@ -11,7 +11,7 @@ Multi-stage programming allows for the development of compiled implementations o
 In order to to target the ideas of multi-stage programming and Python, we introduce Scale. Given the recent popularity of Python due to its capabilities in many subfields of computer science and its general accessibility, we believe it would be beneficial to have more tools for building DSLs in Python.  Within Python there are libraries like MacroPy, which we rely on in Scale, which implements syntactic macros to transform the Python abstract syntax tree (AST). In the following sections, we will describe the Scale language and show examples of how it can be used.
 
 Scale Language
-================
+---------------
 Scale is a low-level statically-typed language embedded in Python 3, designed to help users with staged programming and writing DSLs in Python.
 
     @scale
@@ -45,11 +45,12 @@ Scale also supports block quotes using the syntax `with q as stmt:`. Although es
 
 
 Results and Evaluation
-================
-######Brainfuck Example
+---------------
+###### Brainfuck Example
 
-######Simple Image Processing DSL Example
+###### Simple Image Processing DSL Example
+
 
 Conclusion
-================
+---------------
 The natural next step for this project would be to extend the language to additional features, such as allowing for more complicated scoping rules, creating objects, and additional structures. In order to gauge performance of Scale, we would also measure speed of implementations in Scale against benchmarks in C and Python, along with implementing a more complicated DSL in Scale. We hope that the initially developed version of Scale is not only extended to be more practically useful for users, but also can serve as a baseline or inspiration for further work in developing DSLs and tools for developing DSLs in Python.
