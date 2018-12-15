@@ -238,7 +238,36 @@ define i32 @inner() local_unnamed_addr #0 {
 ```
 
 #### Simple Image Processing DSL Example
-In this section, we describe a Simple Image Processing DSL built using Python and Scale. This DSL supports addition, subtraction, multiplication and division operations on images, using constants, reading from a list of input images, and accessing images using a offset. The IR is implemented as a Python object before being translated to the Python/Scale AST. The IR is compiled into Scale code through three different strategies: 1. looping over each pixel and computing pixel values individually; 2. ; 3. .
+In this section, we briefly describe a Simple Image Processing DSL built using Python and Scale (essentially [Assignment 2 of CS448H at Stanford](https://github.com/CS448H/assignment2)). This DSL supports addition, subtraction, multiplication and division operations on images, using constants, reading from a list of input images, and accessing images using a offset. The IR is implemented as a Python object before being translated to the Python/Scale AST. The IR is compiled into Scale code through three different strategies: 1. looping over each pixel and computing pixel values individually, 2. saving repeated calculations throughout the entire computation in temporary buffers, and 3. saving repeated calculations within a block in temporary buffers (see img.py for the compiler, and blur.py for an example of the DSL in use).
+
+This DSL is implemented by operators on an Image class, and is embedded within Python. An example use of the DSL is the following blur function:
+
+```python
+def doblur(a):
+    blur_x = (a.shift(-1,0) + a + a.shift(1,0))*(1.0/3.0)
+    blur_y = (blur_x.shift(0,-1) + blur_x + blur_x.shift(0,1))*(1.0/3.0) 
+    return blur_y
+```
+
+which can be run with
+```python
+r = (doblur(Image.input(0)))
+r.run(method, image)
+```
+
+where `method` is one of `recompute`, `image_wide`, or `blocked`, corresponding to one of the three strategies mentioned above. 
+
+Operators on the `Image` class are implemented to create an intermediate representation of the DSL in Python. The `run` method call compiles the intermediate representation in Python into a Scale statement, and injects it into an new Scale method (or calls a previously compiled version if already called previously with that method) and then calls it. The Scale method is fairly simple, and looks like:
+
+```python
+@scale.anonymous
+def body(W: int, H: int, output : [float], inputs: [[float]]) -> int:
+    for y in range(H):
+      for x in range(W):
+        output[(y*W + x)] = { gen_tree(tree,x,y) }
+    return 0
+```
+for the simple recompute-everything method.
 
 Conclusion
 ---------------
