@@ -17,6 +17,7 @@ class Backend(ast.NodeVisitor):
         self.global_vars = global_vars.copy()
         self.symbol_table = {}
         self.label_table = {}
+        self.unprocessed_gotos = {}
         self.prologue = None
 
     @staticmethod
@@ -377,47 +378,41 @@ class Backend(ast.NodeVisitor):
         raise NotImplementedError
 
     def visit_Label(self, node):
-        if node.name not in self.label_table:
-            self.label_table[node.name] = (self.func.append_basic_block(),
-                    self.func.append_basic_block(),
-                    self.builder.block, self.symbol_table.copy())
-            nblock = self.label_table[node.name][0]
-            self.builder.branch(nblock)
-            self.builder = llvm.IRBuilder(self.label_table[node.name][1])
-        else:
-            nblock, oldblock, oldst = self.label_table[node.name]
-            newblock = self.builder.block
-            self.builder.branch(nblock)
-            self.builder = llvm.IRBuilder(nblock)
-            self.add_goto_phi(oldblock, oldst, newblock)
+        # for all variables defined thus far, replace them with a phi,
+        # and store in label table
+        # then for each goto in unprocessed_gotos matching this label,
+        # add to phi and add branch, then remove
+        assert node.name not in self.label_table
+        old_block = self.builder.block
+        new_block = self.func.append_basic_block()
+        self.builder.branch(new_block)
+        self.builder = llvm.IRBuilder(new_block)
+        for k, v in list(self.symbol_table.items()):
+            self.symbol_table[k] = self.builder.phi(v.type)
+            self.symbol_table[k].add_incoming(old_block, v)
+        self.label_table[node.name] = (self.builder.block, self.symbol_table.copy())
+        if node.name in self.unprocessed_gotos:
+            for src, st in self.unprocessed_gotos[node.name]:
+                b = llvm.IRBuilder(src)
+                b.branch(self.builder.block)
+                self.add_goto_phi(src, st, node.name)
+            del self.unproocessed_gotos[node.nname]
 
     def visit_Goto(self, node):
         if node.name not in self.label_table:
-            self.label_table[node.name] = (self.func.append_basic_block(),
-                    self.builder.block, self.symbol_table.copy())
-            nblock = self.label_table[node.name][0]
-            self.builder.branch(nblock)
-            self.builder = llvm.IRBuilder(self.func.append_basic_block())
+            if node.name not in self.unprocessed_gotos:
+                self.unprocessed_gotos[node.name] = []
+            self.unprocessed_gotos[node.name].append((self.builder.block,
+                    self.symbol_table.copy()))
         else:
-            nblock, endblock, oldblock, oldst = self.label_table[node.name]
-            newblock = self.builder.block
-            self.builder.branch(nblock)
-            self.builder = llvm.IRBuilder(nblock)
-            self.add_goto_phi(oldblock, oldst, newblock)
-            self.builder.branch(endblock)
-            self.builder = llvm.IRBuilder(self.func.append_basic_block())
+            self.builder.branch(self.label_table[node.name][0])
+            self.add_goto_phi(self.builder.block, self.symbol_table, node.name)
+        self.builder = llvm.IRBuilder(self.func.append_basic_block())
 
-    def add_goto_phi(self, oldblock, oldst, newblock):
-        # TODO allow many-many goto to label matching, currently only supporting 1:1
-        old_sk = set(oldst.keys())
-        new_sk = set(self.symbol_table.keys())
-        for k in new_sk:
-            typ = self.symbol_table[k].type
-            phi = self.builder.phi(typ)
-            if k in old_sk:
-                phi.add_incoming(oldst[k], oldblock)
+    def add_goto_phi(self, oldblock, oldst, label):
+        dblock, st = self.label_table[label], st
+        for k, v in st:
+            if k not in oldst:
+                v.add_incoming(oldblock, llvm.Constant(0, v.type))
             else:
-                phi.add_incoming(llvm.Constant(typ, 0), oldblock)
-            phi.add_incoming(self.symbol_table[k], newblock)
-            self.symbol_table[k] = phi
-
+                v.add_incoming(oldblock, oldst[k])

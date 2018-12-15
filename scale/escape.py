@@ -61,6 +61,8 @@ def to_ast(maybe_ast):
         return list(map(to_ast, maybe_ast))
     elif hasattr(maybe_ast, 'is_scale') and maybe_ast.is_scale:
         return q[name[maybe_ast.scale_name]]
+    elif isinstance(maybe_ast, type):
+        return ast.Name(id=str(maybe_ast)[8:-2])
     else:
         return q[u[maybe_ast]]
 
@@ -72,8 +74,12 @@ class ProcessEscape(SubexprVisitor):
         self.globals = _globals.copy()
         self.locals = _locals.copy()
         self.names = set(list(params))
-        self.locals['goto'] = q[goto]
-        self.locals['label'] = q[label]
+        if 'goto' in self.globals or 'goto' in self.locals:
+            self.names.add('goto')
+            self.locals['goto'] = q[goto]
+        if 'label' in self.globals or 'label' in self.locals:
+            self.names.add('label')
+            self.locals['label'] = q[label]
         for p in params:
             self.locals[p] = q[name[p]]
 

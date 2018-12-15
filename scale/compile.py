@@ -150,7 +150,7 @@ def _scale(f, *, lazy=True, generate_llvm=True, dump_unescaped=False, dump_ir=Fa
             return header_src
         native_runner.pretty = gen_pretty
         native_runner.llvm = lambda: str(list(llvm_mod.functions)[-1])
-        native_runner.opcode = lambda: str(list(opcode.functions)[-2])
+        native_runner.opcode = lambda: str(''.join(map(str, opcode.functions)))
         def compile_inner(*args, **kwargs):
             raise RuntimeError("already compiled")
         native_runner.compile = compile_inner
@@ -218,11 +218,17 @@ class _FuncDefTypeExtractor(SubexprVisitor):
             return TypChecker.bool_typpe
         return node
 
+    def collapse_to_pointer(self, typ):
+        if isinstance(typ, list):
+            return llvm.PointerType(self.collapse_to_pointer(typ[0]))
+        else:
+            return typ
+
     def visit_FunctionDef(self, node):
         args = []
         for x in node.args.args:
-            args.append(self.visit(x.annotation))
-        ret = self.visit(node.returns)
+            args.append(self.collapse_to_pointer(self.visit(x.annotation)))
+        ret = self.collapse_to_pointer(self.visit(node.returns))
 
         if len(node.body) != 1 or not isinstance(node.body[0], ast.Pass):
             raise TypeError('expected empty function body')
@@ -296,7 +302,19 @@ def __native(*args, **kwargs):
     else:
         return functools.partial(__native, **kwargs)
 
+varid = 0
+def __newvar():
+    global varid
+    name = '__scale_generated_var_{}'.format(varid)
+    varid += 1
+    return ast.Name(id=name)
+
+def __var(name):
+    return ast.Name(id=name)
+
 scale.declare = __declare
 scale.native = __native
 scale.anonymous = functools.partial(scale, anonymous=True)
+scale.newvar = __newvar
+scale.var = __var
 
