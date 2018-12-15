@@ -14,6 +14,9 @@ Scale Language
 ---------------
 Scale is a low-level statically-typed language embedded in Python 3, designed to help users with staged programming and writing DSLs in Python.
 
+    @scale.declare
+    def laplace(img: [[int]], out: [[int]], l: int) -> int: pass
+    
     @scale
     def laplace(img: [[int]], out: [[int]], l: int) -> int:
         for i in range(l - 2):
@@ -26,7 +29,7 @@ Scale is a low-level statically-typed language embedded in Python 3, designed to
     @scale.native
     def putchar(n: int) -> int: pass
         
-To differentiate from Python functions, we use the `@scale` decorator to denote Scale functions. Unlike Python, arguments and return types must be explicitly specified, which allows typesafe runtime code generation through LLVM. Scale supports integers, floats, booleans as basic types, and multidimensional arrays as the primary data structure. Scale's control flow consists of if statements, for loops, and gotos, behaving identically to that of Python. Scale supports both function calls to other Scale methods, and also supports C functions by decorating the function with`@scale.native`.
+To differentiate Scale functions from Python functions, we use the `@scale` decorator to denote Scale functions. Unlike Python, arguments and return types must be explicitly specified, which allows typesafe runtime code generation through LLVM. Scale supports integers, floats, booleans as basic types, and multidimensional arrays as its primary data structure. Scale's control flow consists of if statements, for loops, and gotos, behaving similarly to that of Python. Scale supports both function calls to other Scale methods, and calls to functions in libc (after declaring the function with `@scale.native`). Scale also supports function declarations for Scale functions that are defined later, via the `@scale.declare` decorator.
 
 Scale uses the Python AST as an intermediate representation.
         
@@ -40,13 +43,47 @@ Scale uses the Python AST as an intermediate representation.
         
 Scale is meta-programmed with Python through select multi-stage programming operators. Escapes allow the use of Python code within Scale functions. Escapes in Scale are represented by curly brackets `{}`, whose contents are evaluated in Python at compile time and has its return value injected into the AST.
 Quasiquotes allow for Scale expressions outside of Scale functions, and are denoted with `q[]`. They return the AST of the expression within it, generating it using the captured value of Scale variables if present. In the above example, the Scale function calls the Python function within the escape, and the quasiquotes within the Python function allow it to manipulate `x`, which is a variable in Scale.
-
 Scale also supports block quotes using the syntax `with q as stmt:`. Although escapes are not supported within these blocks, the same effect can be achieved through unquotes, `u[]`, which takes the value within the brackets and injects it into the AST assigned to `stmt`.
 
+Scale also supports passing around Scale variables as values in Python: a Scale variable `x` can be passed around Python via the object returned by `scale.var('x')`, and a new unnamed Scale variable can be created in Python via `scale.newvar()`. For example:
+
+    stmts = []
+    for i in range(10):
+        x = scale.newvar()
+        with q as stmt:
+            x = 1
+        stmts.append(stmt)
+    @scale
+    def f() -> int:
+        {stmts}
+        # do something ...
+        return ...
+
+will create and assign to 10 fresh variables the integer value 1.
 
 Results and Evaluation
 ---------------
 #### Brainfuck Example
+In this section, we describe a simple compiler for the turing-complete language [brainfuck](https://esolangs.org/wiki/brainfuck), written in Python and compiled to LLVM with Scale (see bf.py for the full source), in a manner similar to the [brainfuck compiler example for Terra](http://terralang.org/#compiling-a-language).
+
+We place all of the logic for the compiler in the `compile` method:
+
+    def compile(code, N):
+        def body(data, ptr):
+            """ to be implemented below """
+            
+        @scale.anonymous
+        def inner() -> int:
+            data = create_int_array(N)
+            for i in range(N):
+                data[i] = 0
+            ptr = 0
+            { body(data, ptr) }
+            return data[ptr]
+
+        return inner
+
+The `body` method will generate Scale statements, which are then stitched into the Scale AST in the `inner` method before getting compiled down to LLVM. The code in the `inner` method just creates an array of length `N` (the tape), initializes it to 0, and then uses an escape to call `body(data, ptr)` and inject the resulting Scale statements into the body. The values passed into `body` for `data` and `ptr` are the named Scale variables `data` and `ptr`, which can be used to generate statements with those variables.
 
 #### Simple Image Processing DSL Example
 In this section, we describe a Simple Image Processing DSL built using Python and Scale. This DSL supports addition, subtraction, multiplication and division operations on images, using constants, reading from a list of input images, and accessing images using a offset. The IR is implemented as a Python object before being translated to the Python/Scale AST. The IR is compiled into Scale code through three different strategies: 1. looping over each pixel and computing pixel values individually; 2. ; 3. .
