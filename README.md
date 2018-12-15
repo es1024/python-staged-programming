@@ -46,10 +46,10 @@ Scale also supports block quotes using the syntax `with q as stmt:`. Although es
 
 Results and Evaluation
 ---------------
-###### Brainfuck Example
+#### Brainfuck Example
 
-###### Simple Image Processing DSL Example
-
+#### Simple Image Processing DSL Example
+In this section, we describe a Simple Image Processing DSL built using Python and Scale. This DSL supports addition, subtraction, multiplication and division operations on images, using constants, reading from a list of input images, and accessing images using a offset. The IR is implemented as a Python object before being translated to the Python/Scale AST. The IR is compiled into Scale code through three different strategies: 1. looping over each pixel and computing pixel values individually; 2. ; 3. .
 
 Conclusion
 ---------------
