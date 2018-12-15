@@ -46,7 +46,10 @@ Scale also supports block quotes using the syntax `with q as stmt:`. Although es
 
 Results and Evaluation
 ================
+######Brainfuck Example
+
+######Simple Image Processing DSL Example
 
 Conclusion
 ================
-The natural next step for this project would be to extend the language to additional features, such as allowing for more complicated scoping rules, creating objects, and additional structures.
+The natural next step for this project would be to extend the language to additional features, such as allowing for more complicated scoping rules, creating objects, and additional structures. In order to gauge performance of Scale, we would also measure speed of implementations in Scale against benchmarks in C and Python, along with implementing a more complicated DSL in Scale. We hope that the initially developed version of Scale is not only extended to be more practically useful for users, but also can serve as a baseline or inspiration for further work in developing DSLs and tools for developing DSLs in Python.
