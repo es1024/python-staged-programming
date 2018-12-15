@@ -34,7 +34,8 @@ def putchar(n: int) -> int: pass
 To differentiate Scale functions from Python functions, we use the `@scale` decorator to denote Scale functions. Unlike Python, arguments and return types must be explicitly specified, which allows typesafe runtime code generation through LLVM. Scale supports integers, floats, booleans as basic types, and multidimensional arrays as its primary data structure. Scale's control flow consists of if statements, for loops, behaving similarly to that of Python. Scale supports both function calls to other Scale methods, and calls to functions in libc (after declaring the function with `@scale.native`). Scale also supports function declarations for Scale functions that are defined later, via the `@scale.declare` decorator.
 
 Scale also supports the `goto` construct, which, while often not considered best practice for writing code, is frequently useful for generating code:
-```
+
+```python
 a = 'labelA'
 
 @scale
@@ -45,6 +46,7 @@ def test(x: int) -> int:
         goto ^'labelA'
     return x
 ```
+
 Labels are strings, allowing for use of escapes (see below) to generate the label.
 
 Scale uses the Python AST as an intermediate representation.
@@ -110,7 +112,7 @@ Finally, Scale supports anonymous functions:
 @scale.anonymous
 def foo() -> int:
     ...
-``
+```
 
 Here, `foo` contains a wrapper to an anonymous Scale function. It can be called from Python, but cannot be called from Scale with its name. This functionality is useful for Python functions that generate Scale functions to be used from Python, as it avoids name conflicts in the generated LLVM code.
 
