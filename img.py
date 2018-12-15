@@ -153,9 +153,6 @@ class Image:
         result = ConcreteImage(width, height, [0]*(width * height))
         implementation(width, height, result.data, inputs)
         return result
-@scale.native
-def putchar(x: int) -> int:
-    pass
 
 @scale
 def load_data(W: int, H: int, data: [float], x: int, y: int) -> float:
@@ -182,11 +179,7 @@ def compile_ir_recompute(tree):
             xn, yn = q[ast_literal[x] + u[tree.sx]],q[ast_literal[y] + u[tree.sy]]
             return gen_tree(tree.value,xn,yn)
 
-    print(tree.lhs)
-    print(ast.dump(gen_tree(tree, W, H)))
-    print('--------')
-
-    @scale.anonymous(dump_unescaped=True)
+    @scale.anonymous
     def body(W: int, H: int, output : [float], inputs: [[float]]) -> int:
         for y in range(H):
           for x in range(W):
@@ -306,8 +299,8 @@ def compile_ir_image_wide(tree):
 
     @scale.anonymous
     def body(W: int, H: int, output: [float], inputs: [[float]]) -> int:
-        [statements]
-        [cleanup]
+        {statements}
+        {cleanup}
         return 0
     return body
 
